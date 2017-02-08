@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 JAR_DIR := jars
 PKG := github.com/Clever/amazon-kinesis-client-go
-.PHONY: download_jars run build install_deps
+.PHONY: download_jars run build
 
 URL_PREFIX := http://search.maven.org/remotecontent?filepath=
 
@@ -35,16 +35,6 @@ $(JARS_TO_DOWNLOAD):
 	curl -s -L -o $@ -O $(URL_PREFIX)`echo $@ | sed 's/$(JAR_DIR)\///g'`
 
 download_jars: $(JARS_TO_DOWNLOAD)
-
-GLIDE_VERSION = v0.12.3
-$(GOPATH)/src/github.com/Masterminds/glide:
-	git clone -b $(GLIDE_VERSION) https://github.com/Masterminds/glide.git $(GOPATH)/src/github.com/Masterminds/glide
-
-$(GOPATH)/bin/glide: $(GOPATH)/src/github.com/Masterminds/glide
-	go build -o $(GOPATH)/bin/glide github.com/Masterminds/glide
-
-install_deps: $(GOPATH)/bin/glide
-	@$(GOPATH)/bin/glide install -v
 
 build:
 	CGO_ENABLED=0 go build -installsuffix cgo -o build/consumer $(PKG)/cmd/consumer
