@@ -1,0 +1,10 @@
+# osx / sshfs
+._*
+.DS_Store
+
+# emacs / vim
+*~
+\#*\#
+.\#*
+jars/
+build/
