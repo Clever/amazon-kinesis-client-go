@@ -38,7 +38,7 @@ func (ce CheckpointError) Error() string {
 	return ce.e
 }
 
-func (c Checkpointer) Checkpoint(sequenceNumber string, subSequenceNumber int) error {
+func (c Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
 	c.ioHandler.writeAction(ActionCheckpoint{
 		Action:            "checkpoint",
 		SequenceNumber:    sequenceNumber,
@@ -56,9 +56,9 @@ func (c Checkpointer) Checkpoint(sequenceNumber string, subSequenceNumber int) e
 	if !ok {
 		return fmt.Errorf("expected checkpoint response, got '%s'", line.String())
 	}
-	if action.Error != "" {
+	if action.Error != nil && *action.Error != "" {
 		return CheckpointError{
-			e: action.Error,
+			e: *action.Error,
 		}
 	}
 	return nil
@@ -117,10 +117,10 @@ type ActionShutdown struct {
 }
 
 type ActionCheckpoint struct {
-	Action            string `json:"action"`
-	SequenceNumber    string `json:"sequenceNumber"`
-	SubSequenceNumber int    `json:"subSequenceNumber"`
-	Error             string `json:"error"`
+	Action            string  `json:"action"`
+	SequenceNumber    *string `json:"sequenceNumber,omitempty"`
+	SubSequenceNumber *int    `json:"subSequenceNumber,omitempty"`
+	Error             *string `json:"error,omitempty"`
 }
 
 func (i ioHandler) loadAction(line string) (interface{}, error) {

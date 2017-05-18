@@ -31,7 +31,7 @@ func (srp *SampleRecordProcessor) Initialize(shardID string) error {
 	return nil
 }
 
-func (srp *SampleRecordProcessor) checkpoint(checkpointer kcl.Checkpointer, sequenceNumber string, subSequenceNumber int) {
+func (srp *SampleRecordProcessor) checkpoint(checkpointer kcl.Checkpointer, sequenceNumber *string, subSequenceNumber *int) {
 	for n := -1; n < srp.checkpointRetries; n++ {
 		err := checkpointer.Checkpoint(sequenceNumber, subSequenceNumber)
 		if err == nil {
@@ -79,7 +79,8 @@ func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record, checkpoin
 		}
 	}
 	if time.Now().Sub(srp.lastCheckpoint) > srp.checkpointFreq {
-		srp.checkpoint(checkpointer, srp.largestSeq.String(), srp.largestSubSeq)
+		largestSeq := srp.largestSeq.String()
+		srp.checkpoint(checkpointer, &largestSeq, &srp.largestSubSeq)
 		srp.lastCheckpoint = time.Now()
 	}
 	return nil
@@ -88,7 +89,7 @@ func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record, checkpoin
 func (srp *SampleRecordProcessor) Shutdown(checkpointer kcl.Checkpointer, reason string) error {
 	if reason == "TERMINATE" {
 		fmt.Fprintf(os.Stderr, "Was told to terminate, will attempt to checkpoint.\n")
-		srp.checkpoint(checkpointer, "", 0)
+		srp.checkpoint(checkpointer, nil, nil)
 	} else {
 		fmt.Fprintf(os.Stderr, "Shutting down due to failover. Will not checkpoint.\n")
 	}
