@@ -9,16 +9,24 @@ import (
 )
 
 type RecordProcessor interface {
-	Initialize(shardID string) error
-	ProcessRecords(records []Record, checkpointer Checkpointer) error
-	Shutdown(checkpointer Checkpointer, reason string) error
+	Initialize(shardID string, checkpointer *Checkpointer) error
+	ProcessRecords(records []Record) error
+	Shutdown(reason string) error
+}
+
+type CheckpointError struct {
+	e string
+}
+
+func (ce CheckpointError) Error() string {
+	return ce.e
 }
 
 type Checkpointer struct {
 	ioHandler ioHandler
 }
 
-func (c Checkpointer) getAction() (interface{}, error) {
+func (c *Checkpointer) getAction() (interface{}, error) {
 	line, err := c.ioHandler.readLine()
 	if err != nil {
 		return nil, err
@@ -30,15 +38,7 @@ func (c Checkpointer) getAction() (interface{}, error) {
 	return action, nil
 }
 
-type CheckpointError struct {
-	e string
-}
-
-func (ce CheckpointError) Error() string {
-	return ce.e
-}
-
-func (c Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
+func (c *Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
 	c.ioHandler.writeAction(ActionCheckpoint{
 		Action:            "checkpoint",
 		SequenceNumber:    sequenceNumber,
@@ -178,7 +178,7 @@ func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor R
 	}
 	return &KCLProcess{
 		ioHandler: i,
-		checkpointer: Checkpointer{
+		checkpointer: &Checkpointer{
 			ioHandler: i,
 		},
 		recordProcessor: recordProcessor,
@@ -187,7 +187,7 @@ func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor R
 
 type KCLProcess struct {
 	ioHandler       ioHandler
-	checkpointer    Checkpointer
+	checkpointer    *Checkpointer
 	recordProcessor RecordProcessor
 }
 
@@ -204,11 +204,11 @@ func (kclp *KCLProcess) reportDone(responseFor string) error {
 func (kclp *KCLProcess) performAction(a interface{}) (string, error) {
 	switch action := a.(type) {
 	case ActionInitialize:
-		return action.Action, kclp.recordProcessor.Initialize(action.ShardID)
+		return action.Action, kclp.recordProcessor.Initialize(action.ShardID, kclp.checkpointer)
 	case ActionProcessRecords:
-		return action.Action, kclp.recordProcessor.ProcessRecords(action.Records, kclp.checkpointer)
+		return action.Action, kclp.recordProcessor.ProcessRecords(action.Records)
 	case ActionShutdown:
-		return action.Action, kclp.recordProcessor.Shutdown(kclp.checkpointer, action.Reason)
+		return action.Action, kclp.recordProcessor.Shutdown(action.Reason)
 	default:
 		return "", fmt.Errorf("unknown action to dispatch: %s", action)
 	}

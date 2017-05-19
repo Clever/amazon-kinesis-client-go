@@ -10,6 +10,7 @@ import (
 )
 
 type SampleRecordProcessor struct {
+	checkpointer      *kcl.Checkpointer
 	sleepDuration     time.Duration
 	checkpointRetries int
 	checkpointFreq    time.Duration
@@ -26,14 +27,15 @@ func New() *SampleRecordProcessor {
 	}
 }
 
-func (srp *SampleRecordProcessor) Initialize(shardID string) error {
+func (srp *SampleRecordProcessor) Initialize(shardID string, checkpointer *kcl.Checkpointer) error {
 	srp.lastCheckpoint = time.Now()
+	srp.checkpointer = checkpointer
 	return nil
 }
 
-func (srp *SampleRecordProcessor) checkpoint(checkpointer kcl.Checkpointer, sequenceNumber *string, subSequenceNumber *int) {
-	for n := -1; n < srp.checkpointRetries; n++ {
-		err := checkpointer.Checkpoint(sequenceNumber, subSequenceNumber)
+func (srp *SampleRecordProcessor) checkpoint(sequenceNumber *string, subSequenceNumber *int) {
+	for n := 0; n < srp.checkpointRetries+1; n++ {
+		err := srp.checkpointer.Checkpoint(sequenceNumber, subSequenceNumber)
 		if err == nil {
 			return
 		}
@@ -66,7 +68,7 @@ func (srp *SampleRecordProcessor) shouldUpdateSequence(sequenceNumber *big.Int, 
 		(sequenceNumber.Cmp(srp.largestSeq) == 0 && subSequenceNumber > srp.largestSubSeq)
 }
 
-func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record, checkpointer kcl.Checkpointer) error {
+func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 	for _, record := range records {
 		seqNumber := new(big.Int)
 		if _, ok := seqNumber.SetString(record.SequenceNumber, 10); !ok {
@@ -80,16 +82,16 @@ func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record, checkpoin
 	}
 	if time.Now().Sub(srp.lastCheckpoint) > srp.checkpointFreq {
 		largestSeq := srp.largestSeq.String()
-		srp.checkpoint(checkpointer, &largestSeq, &srp.largestSubSeq)
+		srp.checkpoint(&largestSeq, &srp.largestSubSeq)
 		srp.lastCheckpoint = time.Now()
 	}
 	return nil
 }
 
-func (srp *SampleRecordProcessor) Shutdown(checkpointer kcl.Checkpointer, reason string) error {
+func (srp *SampleRecordProcessor) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
 		fmt.Fprintf(os.Stderr, "Was told to terminate, will attempt to checkpoint.\n")
-		srp.checkpoint(checkpointer, nil, nil)
+		srp.checkpoint(nil, nil)
 	} else {
 		fmt.Fprintf(os.Stderr, "Shutting down due to failover. Will not checkpoint.\n")
 	}
