@@ -6,19 +6,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"sync"
+	"time"
 )
 
 type RecordProcessor interface {
-	Initialize(shardID string) error
-	ProcessRecords(records []Record, checkpointer Checkpointer) error
-	Shutdown(checkpointer Checkpointer, reason string) error
+	Initialize(shardID string, checkpointer *Checkpointer) error
+	ProcessRecords(records []Record) error
+	Shutdown(reason string) error
+}
+
+type CheckpointError struct {
+	e string
+}
+
+func (ce CheckpointError) Error() string {
+	return ce.e
 }
 
 type Checkpointer struct {
+	mux sync.Mutex
+
 	ioHandler ioHandler
 }
 
-func (c Checkpointer) getAction() (interface{}, error) {
+func (c *Checkpointer) getAction() (interface{}, error) {
 	line, err := c.ioHandler.readLine()
 	if err != nil {
 		return nil, err
@@ -30,15 +43,10 @@ func (c Checkpointer) getAction() (interface{}, error) {
 	return action, nil
 }
 
-type CheckpointError struct {
-	e string
-}
+func (c *Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
+	c.mux.Lock()
+	defer c.mux.Unlock()
 
-func (ce CheckpointError) Error() string {
-	return ce.e
-}
-
-func (c Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
 	c.ioHandler.writeAction(ActionCheckpoint{
 		Action:            "checkpoint",
 		SequenceNumber:    sequenceNumber,
@@ -62,7 +70,46 @@ func (c Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int)
 		}
 	}
 	return nil
+}
 
+// CheckpointWithRetry tries to save a checkPoint up to `retryCount` + 1 times.
+// `retryCount` should be >= 0
+func (c *Checkpointer) CheckpointWithRetry(
+	sequenceNumber *string, subSequenceNumber *int, retryCount int,
+) error {
+	sleepDuration := 5 * time.Second
+
+	for n := 0; n <= retryCount; n++ {
+		err := c.Checkpoint(sequenceNumber, subSequenceNumber)
+		if err == nil {
+			return nil
+		}
+
+		if cperr, ok := err.(CheckpointError); ok {
+			switch cperr.Error() {
+			case "ShutdownException":
+				return fmt.Errorf("Encountered shutdown exception, skipping checkpoint")
+			case "ThrottlingException":
+				fmt.Fprintf(os.Stderr, "Was throttled while checkpointing, will attempt again in %s\n", sleepDuration)
+			case "InvalidStateException":
+				fmt.Fprintf(os.Stderr, "MultiLangDaemon reported an invalid state while checkpointing\n")
+			default:
+				fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", err)
+			}
+		}
+
+		if n == retryCount {
+			return fmt.Errorf("Failed to checkpoint after %d attempts, giving up.", retryCount)
+		}
+
+		time.Sleep(sleepDuration)
+	}
+
+	return nil
+}
+
+func (c *Checkpointer) Shutdown() {
+	c.CheckpointWithRetry(nil, nil, 5)
 }
 
 type ioHandler struct {
@@ -178,7 +225,7 @@ func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor R
 	}
 	return &KCLProcess{
 		ioHandler: i,
-		checkpointer: Checkpointer{
+		checkpointer: &Checkpointer{
 			ioHandler: i,
 		},
 		recordProcessor: recordProcessor,
@@ -187,7 +234,7 @@ func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor R
 
 type KCLProcess struct {
 	ioHandler       ioHandler
-	checkpointer    Checkpointer
+	checkpointer    *Checkpointer
 	recordProcessor RecordProcessor
 }
 
@@ -204,11 +251,11 @@ func (kclp *KCLProcess) reportDone(responseFor string) error {
 func (kclp *KCLProcess) performAction(a interface{}) (string, error) {
 	switch action := a.(type) {
 	case ActionInitialize:
-		return action.Action, kclp.recordProcessor.Initialize(action.ShardID)
+		return action.Action, kclp.recordProcessor.Initialize(action.ShardID, kclp.checkpointer)
 	case ActionProcessRecords:
-		return action.Action, kclp.recordProcessor.ProcessRecords(action.Records, kclp.checkpointer)
+		return action.Action, kclp.recordProcessor.ProcessRecords(action.Records)
 	case ActionShutdown:
-		return action.Action, kclp.recordProcessor.Shutdown(kclp.checkpointer, action.Reason)
+		return action.Action, kclp.recordProcessor.Shutdown(action.Reason)
 	default:
 		return "", fmt.Errorf("unknown action to dispatch: %s", action)
 	}

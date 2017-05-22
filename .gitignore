@@ -1,3 +1,5 @@
+vendor
+
 # osx / sshfs
 ._*
 .DS_Store
