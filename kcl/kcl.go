@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sync"
+	"time"
 )
 
 type RecordProcessor interface {
@@ -67,6 +69,42 @@ func (c *Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int
 			e: *action.Error,
 		}
 	}
+	return nil
+}
+
+// CheckpointWithRetry tries to save a checkPoint up to `retryCount` + 1 times.
+// `retryCount` should be >= 0
+func (c *Checkpointer) CheckpointWithRetry(
+	sequenceNumber *string, subSequenceNumber *int, retryCount int,
+) error {
+	sleepDuration := 5 * time.Second
+
+	for n := 0; n <= retryCount; n++ {
+		err := c.Checkpoint(sequenceNumber, subSequenceNumber)
+		if err == nil {
+			return nil
+		}
+
+		if cperr, ok := err.(CheckpointError); ok {
+			switch cperr.Error() {
+			case "ShutdownException":
+				return fmt.Errorf("Encountered shutdown exception, skipping checkpoint")
+			case "ThrottlingException":
+				fmt.Fprintf(os.Stderr, "Was throttled while checkpointing, will attempt again in %s\n", sleepDuration)
+			case "InvalidStateException":
+				fmt.Fprintf(os.Stderr, "MultiLangDaemon reported an invalid state while checkpointing\n")
+			default:
+				fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", err)
+			}
+		}
+
+		if n == retryCount {
+			return fmt.Errorf("Failed to checkpoint after %d attempts, giving up.", retryCount)
+		}
+
+		time.Sleep(sleepDuration)
+	}
+
 	return nil
 }
 

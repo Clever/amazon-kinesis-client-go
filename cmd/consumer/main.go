@@ -11,7 +11,6 @@ import (
 
 type SampleRecordProcessor struct {
 	checkpointer      *kcl.Checkpointer
-	sleepDuration     time.Duration
 	checkpointRetries int
 	checkpointFreq    time.Duration
 	largestSeq        *big.Int
@@ -21,7 +20,6 @@ type SampleRecordProcessor struct {
 
 func New() *SampleRecordProcessor {
 	return &SampleRecordProcessor{
-		sleepDuration:     5 * time.Second,
 		checkpointRetries: 5,
 		checkpointFreq:    60 * time.Second,
 	}
@@ -31,36 +29,6 @@ func (srp *SampleRecordProcessor) Initialize(shardID string, checkpointer *kcl.C
 	srp.lastCheckpoint = time.Now()
 	srp.checkpointer = checkpointer
 	return nil
-}
-
-func (srp *SampleRecordProcessor) checkpoint(sequenceNumber *string, subSequenceNumber *int) {
-	for n := 0; n < srp.checkpointRetries+1; n++ {
-		err := srp.checkpointer.Checkpoint(sequenceNumber, subSequenceNumber)
-		if err == nil {
-			return
-		}
-
-		if cperr, ok := err.(kcl.CheckpointError); ok {
-			switch cperr.Error() {
-			case "ShutdownException":
-				fmt.Fprintf(os.Stderr, "Encountered shutdown exception, skipping checkpoint\n")
-				return
-			case "ThrottlingException":
-				fmt.Fprintf(os.Stderr, "Was throttled while checkpointing, will attempt again in %s", srp.sleepDuration)
-			case "InvalidStateException":
-				fmt.Fprintf(os.Stderr, "MultiLangDaemon reported an invalid state while checkpointing\n")
-			default:
-				fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", err)
-			}
-		}
-
-		if n == srp.checkpointRetries {
-			fmt.Fprintf(os.Stderr, "Failed to checkpoint after %d attempts, giving up.\n", srp.checkpointRetries)
-			return
-		}
-
-		time.Sleep(srp.sleepDuration)
-	}
 }
 
 func (srp *SampleRecordProcessor) shouldUpdateSequence(sequenceNumber *big.Int, subSequenceNumber int) bool {
@@ -82,7 +50,7 @@ func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 	}
 	if time.Now().Sub(srp.lastCheckpoint) > srp.checkpointFreq {
 		largestSeq := srp.largestSeq.String()
-		srp.checkpoint(&largestSeq, &srp.largestSubSeq)
+		srp.checkpointer.CheckpointWithRetry(&largestSeq, &srp.largestSubSeq, srp.checkpointRetries)
 		srp.lastCheckpoint = time.Now()
 	}
 	return nil
