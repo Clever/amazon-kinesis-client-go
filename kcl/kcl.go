@@ -108,6 +108,10 @@ func (c *Checkpointer) CheckpointWithRetry(
 	return nil
 }
 
+func (c *Checkpointer) Shutdown() {
+	c.CheckpointWithRetry(nil, nil, 5)
+}
+
 type ioHandler struct {
 	inputFile  io.Reader
 	outputFile io.Writer

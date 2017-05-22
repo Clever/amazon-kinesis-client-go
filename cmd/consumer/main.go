@@ -59,7 +59,7 @@ func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 func (srp *SampleRecordProcessor) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
 		fmt.Fprintf(os.Stderr, "Was told to terminate, will attempt to checkpoint.\n")
-		srp.checkpoint(nil, nil)
+		srp.checkpointer.Shutdown()
 	} else {
 		fmt.Fprintf(os.Stderr, "Shutting down due to failover. Will not checkpoint.\n")
 	}
