@@ -66,8 +66,8 @@ func withDefaults(config Config) Config {
 	if config.ReadRateLimit == 0 {
 		config.ReadRateLimit = 300
 	}
-	if config.ReadRateLimit == 0 {
-		config.ReadRateLimit = int(300 * 1.2)
+	if config.ReadBurstLimit == 0 {
+		config.ReadBurstLimit = int(float64(config.ReadRateLimit)*1.2 + 0.5)
 	}
 
 	if config.CheckpointFreq == 0 {
