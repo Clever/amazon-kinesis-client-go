@@ -35,12 +35,11 @@ type Config struct {
 	CheckpointRetries int
 	// CheckpointRetrySleep the amount of time between checkpoint save attempts
 	CheckpointRetrySleep time.Duration
-
-	logOutput io.Writer
 }
 
 type BatchConsumer struct {
 	kclProcess *kcl.KCLProcess
+	logfile    *os.File
 }
 
 func withDefaults(config Config) Config {
@@ -91,7 +90,6 @@ func NewBatchConsumerFromFiles(
 	if err != nil {
 		log.Fatalf("Unable to create log file: %s", err.Error())
 	}
-	defer file.Close()
 
 	kvlog := logger.New("amazon-kinesis-client-go")
 	kvlog.SetOutput(file)
@@ -105,6 +103,7 @@ func NewBatchConsumerFromFiles(
 
 	return &BatchConsumer{
 		kclProcess: kclProcess,
+		logfile:    file,
 	}
 }
 
@@ -114,4 +113,5 @@ func NewBatchConsumer(config Config, sender Sender) *BatchConsumer {
 
 func (b *BatchConsumer) Start() {
 	b.kclProcess.Run()
+	b.logfile.Close()
 }
