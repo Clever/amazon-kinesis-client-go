@@ -207,10 +207,7 @@ func (b *batchedWriter) CheckPointBatch(tag string) {
 			continue
 		}
 
-		isSmaller := smallest.Sequence == nil || // smallest.Sequence means batch just flushed
-			pair.Sequence.Cmp(smallest.Sequence) == -1 ||
-			(pair.Sequence.Cmp(smallest.Sequence) == 0 && pair.SubSequence < smallest.SubSequence)
-		if isSmaller {
+		if pair.IsLessThan(smallest) {
 			smallest = pair
 		}
 	}

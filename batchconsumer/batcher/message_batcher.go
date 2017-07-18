@@ -13,6 +13,25 @@ type SequencePair struct {
 	SubSequence int
 }
 
+func (s SequencePair) IsLessThan(pair SequencePair) bool {
+	if s.Sequence == nil {
+		return false
+	}
+	if pair.Sequence == nil {
+		return true
+	}
+
+	cmp := s.Sequence.Cmp(pair.Sequence)
+	if cmp == -1 {
+		return true
+	}
+	if cmp == 1 {
+		return false
+	}
+
+	return s.SubSequence < pair.SubSequence
+}
+
 // Sync is used to allow a writer to syncronize with the batcher.
 // The writer declares how to write messages (via its `SendBatch` method), while the batcher
 // keeps track of messages written
@@ -110,11 +129,7 @@ func (b *batcher) updateSequenceNumbers(pair SequencePair) {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
-	isSmaller := b.smallestSeq.Sequence == nil ||
-		pair.Sequence.Cmp(b.smallestSeq.Sequence) == -1 ||
-		(pair.Sequence.Cmp(b.smallestSeq.Sequence) == 0 &&
-			pair.SubSequence < b.smallestSeq.SubSequence)
-	if isSmaller {
+	if pair.IsLessThan(b.smallestSeq) {
 		b.smallestSeq = SequencePair{pair.Sequence, pair.SubSequence}
 	}
 }
