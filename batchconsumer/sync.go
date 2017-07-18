@@ -1,11 +1,11 @@
 package batchconsumer
 
-type BatcherSync struct {
+type batcherSync struct {
 	tag    string
-	writer *BatchedWriter
+	writer *batchedWriter
 }
 
-func (b *BatcherSync) SendBatch(batch [][]byte) {
+func (b *batcherSync) SendBatch(batch [][]byte) {
 	b.writer.SendBatch(batch, b.tag)
 	b.writer.CheckPointBatch(b.tag)
 }

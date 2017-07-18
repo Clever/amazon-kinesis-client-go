@@ -11,7 +11,11 @@ import (
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
+// Config used for BatchConsumer constructor.  Any empty fields are populated with defaults.
 type Config struct {
+	// DeployEnv the name of the deployment environment
+	DeployEnv string
+
 	// LogFile where consumer errors and failed log lines are saved
 	LogFile string
 	// FlushInterval is how often accumulated messages should be bulk put to firehose
@@ -21,15 +25,12 @@ type Config struct {
 	// FlushSize is the size of a batch in bytes that triggers a push to firehose. Max batch size is 4Mb (4*1024*1024), see: http://docs.aws.amazon.com/firehose/latest/dev/limits.html
 	FlushSize int
 
-	// DeployEnv the name of the deployment enviornment
-	DeployEnv string
-
 	// ReadRateLimit the number of records read per seconds
 	ReadRateLimit int
 	// ReadBurstLimit the max number of tokens allowed by rate limiter
 	ReadBurstLimit int
 
-	// CheckpointFreq the frequence in which a checkpoint is saved
+	// CheckpointFreq the frequency in which a checkpoint is saved
 	CheckpointFreq time.Duration
 	// CheckpointRetries the number of times the consumer will try to save a checkpoint
 	CheckpointRetries int
@@ -37,6 +38,7 @@ type Config struct {
 	CheckpointRetrySleep time.Duration
 }
 
+// BatchConsumer is responsible for marshalling
 type BatchConsumer struct {
 	kclProcess *kcl.KCLProcess
 	logfile    *os.File
@@ -81,6 +83,8 @@ func withDefaults(config Config) Config {
 	return config
 }
 
+// NewBatchConsumerFromFiles creates a batch consumer.  Readers/writers provided are used for
+// interprocess communication.
 func NewBatchConsumerFromFiles(
 	config Config, sender Sender, input io.Reader, output, errFile io.Writer,
 ) *BatchConsumer {
@@ -94,7 +98,7 @@ func NewBatchConsumerFromFiles(
 	kvlog := logger.New("amazon-kinesis-client-go")
 	kvlog.SetOutput(file)
 
-	wrt := &BatchedWriter{
+	wrt := &batchedWriter{
 		config: config,
 		log:    kvlog,
 		sender: sender,
@@ -107,10 +111,13 @@ func NewBatchConsumerFromFiles(
 	}
 }
 
+// NewBatchConsumer creates batch consumer.  Stdin, Stdout, and Stderr are used for interprocess
+// communication.
 func NewBatchConsumer(config Config, sender Sender) *BatchConsumer {
 	return NewBatchConsumerFromFiles(config, sender, os.Stdin, os.Stdout, os.Stderr)
 }
 
+// Start when called, the consumer begins ingesting messages.  This function blocks.
 func (b *BatchConsumer) Start() {
 	b.kclProcess.Run()
 	b.logfile.Close()

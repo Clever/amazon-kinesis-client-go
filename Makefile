@@ -1,6 +1,10 @@
+include golang.mk
+.DEFAULT_GOAL := test # override default goal set in library makefile
+
 SHELL := /bin/bash
 JAR_DIR := jars
 PKG := github.com/Clever/amazon-kinesis-client-go
+PKGS := $(shell go list ./... | grep -v /vendor )
 .PHONY: download_jars run build
 
 URL_PREFIX := http://search.maven.org/remotecontent?filepath=
@@ -49,3 +53,7 @@ run: build download_jars
 
 bench:
 	go test -bench=. github.com/Clever/amazon-kinesis-client-go/decode/
+
+test: $(PKGS)
+$(PKGS): golang-test-all-deps
+	$(call golang-test-all,$@)

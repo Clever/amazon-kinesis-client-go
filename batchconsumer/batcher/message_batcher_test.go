@@ -37,8 +37,7 @@ func (m *MockSync) waitForFlush(timeout time.Duration) error {
 	}
 }
 
-const mockSequenceNumber = "99999"
-const mockSubSequenceNumber = 12345
+var mockSequence = SequencePair{big.NewInt(99999), 12345}
 
 func TestBatchingByCount(t *testing.T) {
 	var err error
@@ -48,9 +47,9 @@ func TestBatchingByCount(t *testing.T) {
 	batcher := New(sync, time.Hour, 2, 1024*1024)
 
 	t.Log("Batcher respect count limit")
-	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequenceNumber, mockSubSequenceNumber))
-	assert.NoError(batcher.AddMessage([]byte("heyhey"), mockSequenceNumber, mockSubSequenceNumber))
-	assert.NoError(batcher.AddMessage([]byte("hmmhmm"), mockSequenceNumber, mockSubSequenceNumber))
+	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequence))
+	assert.NoError(batcher.AddMessage([]byte("heyhey"), mockSequence))
+	assert.NoError(batcher.AddMessage([]byte("hmmhmm"), mockSequence))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -73,7 +72,7 @@ func TestBatchingByTime(t *testing.T) {
 	batcher := New(sync, time.Millisecond, 2000000, 1024*1024)
 
 	t.Log("Batcher sends partial batches when time expires")
-	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequenceNumber, mockSubSequenceNumber))
+	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequence))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -83,8 +82,8 @@ func TestBatchingByTime(t *testing.T) {
 	assert.Equal("hihi", string(sync.batches[0][0]))
 
 	t.Log("Batcher sends all messsages in partial batches when time expires")
-	assert.NoError(batcher.AddMessage([]byte("heyhey"), mockSequenceNumber, mockSubSequenceNumber))
-	assert.NoError(batcher.AddMessage([]byte("yoyo"), mockSequenceNumber, mockSubSequenceNumber))
+	assert.NoError(batcher.AddMessage([]byte("heyhey"), mockSequence))
+	assert.NoError(batcher.AddMessage([]byte("yoyo"), mockSequence))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -107,7 +106,7 @@ func TestBatchingBySize(t *testing.T) {
 	batcher := New(sync, time.Hour, 2000000, 8)
 
 	t.Log("Large messages are sent immediately")
-	assert.NoError(batcher.AddMessage([]byte("hellohello"), mockSequenceNumber, mockSubSequenceNumber))
+	assert.NoError(batcher.AddMessage([]byte("hellohello"), mockSequence))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -117,8 +116,8 @@ func TestBatchingBySize(t *testing.T) {
 	assert.Equal("hellohello", string(sync.batches[0][0]))
 
 	t.Log("Batcher tries not to exceed size limit")
-	assert.NoError(batcher.AddMessage([]byte("heyhey"), mockSequenceNumber, mockSubSequenceNumber))
-	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequenceNumber, mockSubSequenceNumber))
+	assert.NoError(batcher.AddMessage([]byte("heyhey"), mockSequence))
+	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequence))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -128,7 +127,7 @@ func TestBatchingBySize(t *testing.T) {
 	assert.Equal("heyhey", string(sync.batches[1][0]))
 
 	t.Log("Batcher sends messages that didn't fit in previous batch")
-	assert.NoError(batcher.AddMessage([]byte("yoyo"), mockSequenceNumber, mockSubSequenceNumber)) // At this point "hihi" is in the batch
+	assert.NoError(batcher.AddMessage([]byte("yoyo"), mockSequence)) // At this point "hihi" is in the batch
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -139,7 +138,7 @@ func TestBatchingBySize(t *testing.T) {
 	assert.Equal("yoyo", string(sync.batches[2][1]))
 
 	t.Log("Batcher doesn't send partial batches")
-	assert.NoError(batcher.AddMessage([]byte("okok"), mockSequenceNumber, mockSubSequenceNumber))
+	assert.NoError(batcher.AddMessage([]byte("okok"), mockSequence))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.Error(err)
@@ -153,7 +152,7 @@ func TestFlushing(t *testing.T) {
 	batcher := New(sync, time.Hour, 2000000, 1024*1024)
 
 	t.Log("Calling flush sends pending messages")
-	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequenceNumber, mockSubSequenceNumber))
+	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequence))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.Error(err)
@@ -176,7 +175,7 @@ func TestSendingEmpty(t *testing.T) {
 	batcher := New(sync, time.Second, 10, 1024*1024)
 
 	t.Log("An error is returned when an empty message is sent")
-	err = batcher.AddMessage([]byte{}, mockSequenceNumber, mockSubSequenceNumber)
+	err = batcher.AddMessage([]byte{}, mockSequence)
 	assert.Error(err)
 }
 
@@ -187,26 +186,29 @@ func TestUpdatingSequence(t *testing.T) {
 	batcher := New(sync, time.Second, 10, 1024*1024).(*batcher)
 
 	t.Log("Initally, smallestSeq is undefined")
+	assert.Nil(batcher.SmallestSequencePair().Sequence)
+
 	expected := new(big.Int)
-	assert.Nil(batcher.smallestSeq.Sequence)
 
 	t.Log("After AddMessage (seq=1), smallestSeq = 1")
-	assert.NoError(batcher.AddMessage([]byte("abab"), "1", mockSubSequenceNumber))
-	sync.waitForFlush(time.Minute)
+	batcher.updateSequenceNumbers(SequencePair{big.NewInt(1), 1234})
 	expected.SetInt64(1)
 	seq := batcher.SmallestSequencePair()
 	assert.True(expected.Cmp(seq.Sequence) == 0)
 
 	t.Log("After AddMessage (seq=2), smallestSeq = 1 -- not updated because higher")
-	assert.NoError(batcher.AddMessage([]byte("cdcd"), "2", mockSubSequenceNumber))
-	sync.waitForFlush(time.Minute)
+	batcher.updateSequenceNumbers(SequencePair{big.NewInt(2), 1234})
 	seq = batcher.SmallestSequencePair()
 	assert.True(expected.Cmp(seq.Sequence) == 0)
 
 	t.Log("After AddMessage (seq=1), smallestSeq = 0")
-	assert.NoError(batcher.AddMessage([]byte("efef"), "0", mockSubSequenceNumber))
-	sync.waitForFlush(time.Minute)
+	batcher.updateSequenceNumbers(SequencePair{big.NewInt(0), 1234})
 	expected.SetInt64(0)
 	seq = batcher.SmallestSequencePair()
 	assert.True(expected.Cmp(seq.Sequence) == 0)
+
+	t.Log("Flushing batch clears smallest sequence pair")
+	assert.NoError(batcher.AddMessage([]byte("cdcd"), SequencePair{big.NewInt(2), 1234}))
+	sync.waitForFlush(time.Minute)
+	assert.Nil(batcher.SmallestSequencePair().Sequence)
 }

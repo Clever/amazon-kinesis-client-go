@@ -35,16 +35,16 @@ func main() {
 	output, file := createDummyOutput()
 	defer file.Close()
 
-	wrt := &ExampleWriter{output: output}
-	consumer := kbc.NewBatchConsumer(config, wrt)
+	sender := &exampleSender{output: output}
+	consumer := kbc.NewBatchConsumer(config, sender)
 	consumer.Start()
 }
 
-type ExampleWriter struct {
+type exampleSender struct {
 	output logger.KayveeLogger
 }
 
-func (e *ExampleWriter) EncodeLog(rawlog []byte) ([]byte, []string, error) {
+func (e *exampleSender) EncodeLog(rawlog []byte) ([]byte, []string, error) {
 	if len(rawlog)%5 == 2 {
 		return nil, nil, kbc.ErrLogIgnored
 	}
@@ -55,7 +55,7 @@ func (e *ExampleWriter) EncodeLog(rawlog []byte) ([]byte, []string, error) {
 	return []byte(line), []string{tag1}, nil
 }
 
-func (e *ExampleWriter) SendBatch(batch [][]byte, tag string) error {
+func (e *exampleSender) SendBatch(batch [][]byte, tag string) error {
 	for idx, line := range batch {
 		e.output.InfoD(tag, logger.M{"idx": idx, "line": string(line)})
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// SequencePair a convience way to pass around a Sequence / SubSequence pair
 type SequencePair struct {
 	Sequence    *big.Int
 	SubSequence int

@@ -16,7 +16,7 @@ func TestUnpacking(t *testing.T) {
 	decoded, err := b64.StdEncoding.DecodeString(input)
 	assert.NoError(t, err)
 
-	output, err := unpack(string(decoded))
+	output, err := unpack(decoded)
 	assert.NoError(t, err)
 
 	expectedOutput := LogEventBatch{
@@ -92,7 +92,7 @@ func TestFullLoop(t *testing.T) {
 	decoded, err := b64.StdEncoding.DecodeString(packed)
 	assert.NoError(t, err)
 
-	output, err := unpack(string(decoded))
+	output, err := unpack(decoded)
 	assert.NoError(t, err)
 
 	assert.Equal(t, leb, output)
@@ -121,8 +121,8 @@ func TestSplit(t *testing.T) {
 	prodEnv := false
 	lines := Split(input, prodEnv)
 	expected := [][]byte{
-		"2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: some log line",
-		"2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: another log line",
+		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: some log line"),
+		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: another log line"),
 	}
 	assert.Equal(t, expected, lines)
 }

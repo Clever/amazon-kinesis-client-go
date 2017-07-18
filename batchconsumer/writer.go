@@ -16,7 +16,7 @@ import (
 	"github.com/Clever/amazon-kinesis-client-go/splitter"
 )
 
-type BatchedWriter struct {
+type batchedWriter struct {
 	config Config
 	sender Sender
 	log    kv.KayveeLogger
@@ -31,7 +31,7 @@ type BatchedWriter struct {
 	lastProcessedSeq batcher.SequencePair
 }
 
-func (b *BatchedWriter) Initialize(shardID string, checkpointer *kcl.Checkpointer) error {
+func (b *batchedWriter) Initialize(shardID string, checkpointer *kcl.Checkpointer) error {
 	b.batchers = map[string]batcher.Batcher{}
 	b.shardID = shardID
 	b.checkpointChan = make(chan batcher.SequencePair)
@@ -43,7 +43,7 @@ func (b *BatchedWriter) Initialize(shardID string, checkpointer *kcl.Checkpointe
 }
 
 // handleCheckpointError returns true if checkout should be tried again.  Returns false otherwise.
-func (b *BatchedWriter) handleCheckpointError(err error) bool {
+func (b *batchedWriter) handleCheckpointError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -71,7 +71,7 @@ func (b *BatchedWriter) handleCheckpointError(err error) bool {
 	return true
 }
 
-func (b *BatchedWriter) startCheckpointListener(
+func (b *batchedWriter) startCheckpointListener(
 	checkpointer *kcl.Checkpointer, checkpointChan <-chan batcher.SequencePair,
 ) {
 	lastCheckpoint := time.Now()
@@ -113,15 +113,15 @@ func (b *BatchedWriter) startCheckpointListener(
 	}()
 }
 
-func (b *BatchedWriter) createBatcher(tag string) batcher.Batcher {
-	sync := &BatcherSync{
+func (b *batchedWriter) createBatcher(tag string) batcher.Batcher {
+	sync := &batcherSync{
 		tag:    tag,
 		writer: b,
 	}
 	return batcher.New(sync, b.config.FlushInterval, b.config.FlushCount, b.config.FlushSize)
 }
 
-func (b *BatchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error) {
+func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error) {
 	// We handle two types of records:
 	// - records emitted from CWLogs Subscription
 	// - records emiited from KPL
@@ -134,7 +134,7 @@ func (b *BatchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error)
 	return splitter.GetMessagesFromGzippedInput(record, b.config.DeployEnv == "production")
 }
 
-func (b *BatchedWriter) ProcessRecords(records []kcl.Record) error {
+func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 	curSequence := b.lastProcessedSeq
 
 	for _, record := range records {
@@ -194,7 +194,7 @@ func (b *BatchedWriter) ProcessRecords(records []kcl.Record) error {
 	return nil
 }
 
-func (b *BatchedWriter) CheckPointBatch(tag string) {
+func (b *batchedWriter) CheckPointBatch(tag string) {
 	smallest := b.lastProcessedSeq
 
 	for name, batch := range b.batchers {
@@ -218,7 +218,7 @@ func (b *BatchedWriter) CheckPointBatch(tag string) {
 	b.checkpointChan <- smallest
 }
 
-func (b *BatchedWriter) SendBatch(batch [][]byte, tag string) {
+func (b *batchedWriter) SendBatch(batch [][]byte, tag string) {
 	b.log.Info("sent-batch")
 	err := b.sender.SendBatch(batch, tag)
 	switch e := err.(type) {
@@ -237,7 +237,7 @@ func (b *BatchedWriter) SendBatch(batch [][]byte, tag string) {
 	}
 }
 
-func (b *BatchedWriter) Shutdown(reason string) error {
+func (b *batchedWriter) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
 		b.log.InfoD("terminate-signal", kv.M{"shard-id": b.shardID})
 		for _, batch := range b.batchers {
