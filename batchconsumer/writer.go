@@ -118,7 +118,7 @@ func (b *batchedWriter) createBatcher(tag string) batcher.Batcher {
 		tag:    tag,
 		writer: b,
 	}
-	return batcher.New(sync, b.config.FlushInterval, b.config.FlushCount, b.config.FlushSize)
+	return batcher.New(sync, b.config.BatchInterval, b.config.BatchCount, b.config.BatchSize)
 }
 
 func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error) {

@@ -25,9 +25,9 @@ func createDummyOutput() (logger.KayveeLogger, *os.File) {
 
 func main() {
 	config := kbc.Config{
-		FlushInterval: 10 * time.Second,
-		FlushCount:    500,
-		FlushSize:     4 * 1024 * 1024, // 4Mb
+		BatchInterval: 10 * time.Second,
+		BatchCount:    500,
+		BatchSize:     4 * 1024 * 1024, // 4Mb
 		LogFile:       "/tmp/example-kcl-consumer",
 		DeployEnv:     "test-env",
 	}
