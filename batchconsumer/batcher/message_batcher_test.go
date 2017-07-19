@@ -177,6 +177,7 @@ func TestSendingEmpty(t *testing.T) {
 	t.Log("An error is returned when an empty message is sent")
 	err = batcher.AddMessage([]byte{}, mockSequence)
 	assert.Error(err)
+	assert.Equal(err.Error(), "Empty messages can't be sent")
 }
 
 func TestUpdatingSequence(t *testing.T) {
