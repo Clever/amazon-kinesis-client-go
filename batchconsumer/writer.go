@@ -159,8 +159,8 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 			return err
 		}
 		for _, rawlog := range rawlogs {
-			log, tags, err := b.sender.EncodeLog(rawlog)
-			if err == ErrLogIgnored {
+			log, tags, err := b.sender.ProcessMessage(rawlog)
+			if err == ErrMessageIgnored {
 				continue // Skip message
 			} else if err != nil {
 				return err
@@ -220,12 +220,12 @@ func (b *batchedWriter) SendBatch(batch [][]byte, tag string) {
 	err := b.sender.SendBatch(batch, tag)
 	switch e := err.(type) {
 	case nil: // Do nothing
-	case PartialOutputError:
+	case PartialSendBatchError:
 		b.log.ErrorD("send-batch", kv.M{"msg": e.Error()})
-		for _, line := range e.Logs {
+		for _, line := range e.FailedMessages {
 			b.log.ErrorD("failed-log", kv.M{"log": line})
 		}
-	case CatastrophicOutputError:
+	case CatastrophicSendBatchError:
 		b.log.CriticalD("send-batch", kv.M{"msg": e.Error()})
 		os.Exit(1)
 	default:

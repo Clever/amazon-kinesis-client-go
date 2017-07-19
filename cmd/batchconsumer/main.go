@@ -44,13 +44,13 @@ type exampleSender struct {
 	output logger.KayveeLogger
 }
 
-func (e *exampleSender) EncodeLog(rawlog []byte) ([]byte, []string, error) {
-	if len(rawlog)%5 == 2 {
-		return nil, nil, kbc.ErrLogIgnored
+func (e *exampleSender) ProcessMessage(rawmsg []byte) ([]byte, []string, error) {
+	if len(rawmsg)%5 == 2 {
+		return nil, nil, kbc.ErrMessageIgnored
 	}
 
-	tag1 := fmt.Sprintf("tag-%d", len(rawlog)%5)
-	line := tag1 + ": " + string(rawlog)
+	tag1 := fmt.Sprintf("tag-%d", len(rawmsg)%5)
+	line := tag1 + ": " + string(rawmsg)
 
 	return []byte(line), []string{tag1}, nil
 }
