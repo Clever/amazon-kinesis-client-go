@@ -40,11 +40,11 @@ func (m *MockSync) waitForFlush(timeout time.Duration) error {
 var mockSequence = SequencePair{big.NewInt(99999), 12345}
 
 func TestBatchingByCount(t *testing.T) {
-	var err error
 	assert := assert.New(t)
 
 	sync := NewMockSync()
-	batcher := New(sync, time.Hour, 2, 1024*1024)
+	batcher, err := New(sync, time.Hour, 2, 1024*1024)
+	assert.NoError(err)
 
 	t.Log("Batcher respect count limit")
 	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequence))
@@ -65,11 +65,11 @@ func TestBatchingByCount(t *testing.T) {
 }
 
 func TestBatchingByTime(t *testing.T) {
-	var err error
 	assert := assert.New(t)
 
 	sync := NewMockSync()
-	batcher := New(sync, time.Millisecond, 2000000, 1024*1024)
+	batcher, err := New(sync, time.Millisecond, 2000000, 1024*1024)
+	assert.NoError(err)
 
 	t.Log("Batcher sends partial batches when time expires")
 	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequence))
@@ -99,11 +99,11 @@ func TestBatchingByTime(t *testing.T) {
 }
 
 func TestBatchingBySize(t *testing.T) {
-	var err error
 	assert := assert.New(t)
 
 	sync := NewMockSync()
-	batcher := New(sync, time.Hour, 2000000, 8)
+	batcher, err := New(sync, time.Hour, 2000000, 8)
+	assert.NoError(err)
 
 	t.Log("Large messages are sent immediately")
 	assert.NoError(batcher.AddMessage([]byte("hellohello"), mockSequence))
@@ -145,11 +145,11 @@ func TestBatchingBySize(t *testing.T) {
 }
 
 func TestFlushing(t *testing.T) {
-	var err error
 	assert := assert.New(t)
 
 	sync := NewMockSync()
-	batcher := New(sync, time.Hour, 2000000, 1024*1024)
+	batcher, err := New(sync, time.Hour, 2000000, 1024*1024)
+	assert.NoError(err)
 
 	t.Log("Calling flush sends pending messages")
 	assert.NoError(batcher.AddMessage([]byte("hihi"), mockSequence))
@@ -168,11 +168,11 @@ func TestFlushing(t *testing.T) {
 }
 
 func TestSendingEmpty(t *testing.T) {
-	var err error
 	assert := assert.New(t)
 
 	sync := NewMockSync()
-	batcher := New(sync, time.Second, 10, 1024*1024)
+	batcher, err := New(sync, time.Second, 10, 1024*1024)
+	assert.NoError(err)
 
 	t.Log("An error is returned when an empty message is sent")
 	err = batcher.AddMessage([]byte{}, mockSequence)
@@ -184,7 +184,10 @@ func TestUpdatingSequence(t *testing.T) {
 	assert := assert.New(t)
 
 	sync := NewMockSync()
-	batcher := New(sync, time.Second, 10, 1024*1024).(*batcher)
+	b, err := New(sync, time.Second, 10, 1024*1024)
+	assert.NoError(err)
+
+	batcher := b.(*batcher)
 
 	t.Log("Initally, smallestSeq is undefined")
 	assert.Nil(batcher.SmallestSequencePair().Sequence)

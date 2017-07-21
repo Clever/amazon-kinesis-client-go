@@ -118,7 +118,12 @@ func (b *batchedWriter) createBatcher(tag string) batcher.Batcher {
 		tag:    tag,
 		writer: b,
 	}
-	return batcher.New(sync, b.config.BatchInterval, b.config.BatchCount, b.config.BatchSize)
+	batch, err := batcher.New(sync, b.config.BatchInterval, b.config.BatchCount, b.config.BatchSize)
+	if err != nil {
+		b.log.ErrorD("create-batcher", kv.M{"msg": err.Error(), "tag": tag})
+	}
+
+	return batch
 }
 
 func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error) {

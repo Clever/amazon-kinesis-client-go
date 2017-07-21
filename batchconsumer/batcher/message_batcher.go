@@ -76,8 +76,18 @@ type batcher struct {
 // - flushInterval - how often accumulated messages should be flushed (default 1 second).
 // - flushCount - number of messages that trigger a flush (default 10).
 // - flushSize - size of batch that triggers a flush (default 1024 * 1024 = 1 mb)
-func New(sync Sync, flushInterval time.Duration, flushCount int, flushSize int) Batcher {
-	msgChan := make(chan msgPack, 100)
+func New(sync Sync, flushInterval time.Duration, flushCount int, flushSize int) (Batcher, error) {
+	if flushSize == 0 {
+		return nil, fmt.Errorf("flush size must be non-zero")
+	}
+	if flushCount == 0 {
+		return nil, fmt.Errorf("flush count must be non-zero")
+	}
+	if flushInterval == 0 {
+		return nil, fmt.Errorf("flush interval must be non-zero")
+	}
+
+	msgChan := make(chan msgPack)
 	flushChan := make(chan struct{})
 
 	b := &batcher{
@@ -91,7 +101,7 @@ func New(sync Sync, flushInterval time.Duration, flushCount int, flushSize int) 
 
 	go b.startBatcher(msgChan, flushChan)
 
-	return b
+	return b, nil
 }
 
 func (b *batcher) SmallestSequencePair() SequencePair {
