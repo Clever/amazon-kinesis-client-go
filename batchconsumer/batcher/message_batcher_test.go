@@ -226,9 +226,8 @@ func TestSequencePairIsLessThan(t *testing.T) {
 		isLess bool
 	}{
 		{left: SequencePair{nil, 0}, right: SequencePair{nil, 0}, isLess: false},
-		{left: SequencePair{nil, 0}, right: SequencePair{big10, 10}, isLess: false},
-
-		{left: SequencePair{big10, 0}, right: SequencePair{nil, 0}, isLess: true},
+		{left: SequencePair{nil, 0}, right: SequencePair{big10, 0}, isLess: false},
+		{left: SequencePair{big10, 0}, right: SequencePair{nil, 0}, isLess: false},
 
 		{left: SequencePair{big5, 0}, right: SequencePair{big10, 0}, isLess: true},
 		{left: SequencePair{big5, 0}, right: SequencePair{big5, 10}, isLess: true},
@@ -249,4 +248,14 @@ func TestSequencePairIsLessThan(t *testing.T) {
 
 		assert.Equal(test.isLess, left.IsLessThan(right))
 	}
+}
+
+func TestSequencePairEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.True(SequencePair{nil, 0}.IsEmpty())
+	assert.True(SequencePair{nil, 10000}.IsEmpty())
+
+	assert.False(SequencePair{big.NewInt(10), 0}.IsEmpty())
+	assert.False(SequencePair{big.NewInt(0), 1000}.IsEmpty())
 }

@@ -13,12 +13,13 @@ type SequencePair struct {
 	SubSequence int
 }
 
+func (s SequencePair) IsEmpty() bool {
+	return s.Sequence == nil
+}
+
 func (s SequencePair) IsLessThan(pair SequencePair) bool {
-	if s.Sequence == nil {
+	if s.IsEmpty() || pair.IsEmpty() { // empty pairs are incomparable
 		return false
-	}
-	if pair.Sequence == nil {
-		return true
 	}
 
 	cmp := s.Sequence.Cmp(pair.Sequence)
@@ -62,8 +63,7 @@ type batcher struct {
 	flushCount    int
 	flushSize     int
 
-	// smallestSeq and smallestSubSeq are used to track the highest sequence number
-	// of any record in the batch. This is used for checkpointing.
+	// smallestSeq are used for checkpointing
 	smallestSeq SequencePair
 
 	sync      Sync
@@ -129,8 +129,8 @@ func (b *batcher) updateSequenceNumbers(pair SequencePair) {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
-	if pair.IsLessThan(b.smallestSeq) {
-		b.smallestSeq = SequencePair{pair.Sequence, pair.SubSequence}
+	if b.smallestSeq.IsEmpty() || pair.IsLessThan(b.smallestSeq) {
+		b.smallestSeq = pair
 	}
 }
 
