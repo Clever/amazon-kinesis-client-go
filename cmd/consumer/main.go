@@ -10,7 +10,7 @@ import (
 )
 
 type sampleRecordProcessor struct {
-	checkpointer      *kcl.Checkpointer
+	checkpointer      kcl.Checkpointer
 	checkpointRetries int
 	checkpointFreq    time.Duration
 	largestSeq        *big.Int
@@ -25,7 +25,7 @@ func newSampleRecordProcessor() *sampleRecordProcessor {
 	}
 }
 
-func (srp *sampleRecordProcessor) Initialize(shardID string, checkpointer *kcl.Checkpointer) error {
+func (srp *sampleRecordProcessor) Initialize(shardID string, checkpointer kcl.Checkpointer) error {
 	srp.lastCheckpoint = time.Now()
 	srp.checkpointer = checkpointer
 	return nil
