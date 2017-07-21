@@ -284,11 +284,17 @@ func (kclp *KCLProcess) Run() {
 	for {
 		line, err := kclp.ioHandler.readLine()
 		if err != nil {
-			kclp.ioHandler.writeError(err.Error())
+			kclp.ioHandler.writeError("Read line error: " + err.Error())
 			return
 		} else if line == nil {
-			break
+			kclp.ioHandler.writeError("Empty read line recieved")
+			return
 		}
-		kclp.handleLine(line.String())
+
+		err = kclp.handleLine(line.String())
+		if err != nil {
+			kclp.ioHandler.writeError("Handle line error: " + err.Error())
+			return
+		}
 	}
 }
