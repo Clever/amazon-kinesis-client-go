@@ -98,11 +98,7 @@ func NewBatchConsumerFromFiles(
 	kvlog := logger.New("amazon-kinesis-client-go")
 	kvlog.SetOutput(file)
 
-	wrt := &batchedWriter{
-		config: config,
-		log:    kvlog,
-		sender: sender,
-	}
+	wrt := NewBatchedWriter(config, sender, kvlog)
 	kclProcess := kcl.New(input, output, errFile, wrt)
 
 	return &BatchConsumer{

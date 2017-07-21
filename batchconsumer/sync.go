@@ -7,5 +7,4 @@ type batcherSync struct {
 
 func (b *batcherSync) SendBatch(batch [][]byte) {
 	b.writer.SendBatch(batch, b.tag)
-	b.writer.CheckPointBatch(b.tag)
 }

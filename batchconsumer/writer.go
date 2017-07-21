@@ -16,28 +16,51 @@ import (
 	"github.com/Clever/amazon-kinesis-client-go/splitter"
 )
 
+type tagMsgPair struct {
+	tag  string
+	msg  []byte
+	pair batcher.SequencePair
+}
+
 type batchedWriter struct {
 	config Config
 	sender Sender
 	log    kv.KayveeLogger
 
-	shardID        string
-	checkpointChan chan batcher.SequencePair
+	shardID string
+
+	checkpointMsg     chan batcher.SequencePair
+	checkpointTag     chan string
+	lastProcessedPair chan batcher.SequencePair
+	batchMsg          chan tagMsgPair
+	flushBatches      chan struct{}
 
 	// Limits the number of records read from the stream
 	rateLimiter *rate.Limiter
 
-	batchers         map[string]batcher.Batcher
 	lastProcessedSeq batcher.SequencePair
 }
 
-func (b *batchedWriter) Initialize(shardID string, checkpointer *kcl.Checkpointer) error {
-	b.batchers = map[string]batcher.Batcher{}
-	b.shardID = shardID
-	b.checkpointChan = make(chan batcher.SequencePair)
-	b.rateLimiter = rate.NewLimiter(rate.Limit(b.config.ReadRateLimit), b.config.ReadBurstLimit)
+func NewBatchedWriter(config Config, sender Sender, log kv.KayveeLogger) *batchedWriter {
+	return &batchedWriter{
+		config: config,
+		sender: sender,
+		log:    log,
 
-	b.startCheckpointListener(checkpointer, b.checkpointChan)
+		rateLimiter: rate.NewLimiter(rate.Limit(config.ReadRateLimit), config.ReadBurstLimit),
+	}
+}
+
+func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer) error {
+	b.shardID = shardID
+	b.checkpointMsg = make(chan batcher.SequencePair)
+	b.startCheckpointListener(checkpointer, b.checkpointMsg)
+
+	b.checkpointTag = make(chan string)
+	b.batchMsg = make(chan tagMsgPair)
+	b.flushBatches = make(chan struct{})
+	b.lastProcessedPair = make(chan batcher.SequencePair)
+	b.startMessageHandler(b.batchMsg, b.checkpointTag, b.lastProcessedPair, b.flushBatches)
 
 	return nil
 }
@@ -72,19 +95,19 @@ func (b *batchedWriter) handleCheckpointError(err error) bool {
 }
 
 func (b *batchedWriter) startCheckpointListener(
-	checkpointer *kcl.Checkpointer, checkpointChan <-chan batcher.SequencePair,
+	checkpointer kcl.Checkpointer, checkpointMsg <-chan batcher.SequencePair,
 ) {
-	lastCheckpoint := time.Now()
-
 	go func() {
+		lastCheckpoint := time.Now()
+
 		for {
-			seq := <-checkpointChan
+			seq := <-checkpointMsg
 
 			// This is a write throttle to ensure we don't checkpoint faster than
 			// b.config.CheckpointFreq.  The latest seq number is always used.
 			for time.Now().Sub(lastCheckpoint) < b.config.CheckpointFreq {
 				select {
-				case seq = <-checkpointChan: // Keep updating checkpoint seq while waiting
+				case seq = <-checkpointMsg: // Keep updating checkpoint seq while waiting
 				case <-time.NewTimer(b.config.CheckpointFreq - time.Now().Sub(lastCheckpoint)).C:
 				}
 			}
@@ -126,6 +149,74 @@ func (b *batchedWriter) createBatcher(tag string) batcher.Batcher {
 	return batch
 }
 
+// startMessageDistributer starts a go-routine that routes messages to batches.  It's in uses a
+// go routine to avoid racey conditions.
+func (b *batchedWriter) startMessageHandler(
+	batchMsg <-chan tagMsgPair, checkpointTag <-chan string, lastPair <-chan batcher.SequencePair,
+	flushBatches <-chan struct{},
+) {
+	go func() {
+		var lastProcessedPair batcher.SequencePair
+		batchers := map[string]batcher.Batcher{}
+		areBatchersEmpty := true
+
+		for {
+			select {
+			case tmp := <-batchMsg:
+				batcher, ok := batchers[tmp.tag]
+				if !ok {
+					batcher = b.createBatcher(tmp.tag)
+					batchers[tmp.tag] = batcher
+				}
+
+				err := batcher.AddMessage(tmp.msg, tmp.pair)
+				if err != nil {
+					b.log.ErrorD("add-message", kv.M{
+						"err": err.Error(), "msg": string(tmp.msg), "tag": tmp.tag,
+					})
+				}
+				areBatchersEmpty = false
+			case tag := <-checkpointTag:
+				smallest := lastProcessedPair
+				isAllEmpty := true
+
+				for name, batch := range batchers {
+					if tag == name {
+						continue
+					}
+
+					pair := batch.SmallestSequencePair()
+					if pair.IsEmpty() { // Occurs when batch has no items
+						continue
+					}
+
+					if pair.IsLessThan(smallest) {
+						smallest = pair
+					}
+
+					isAllEmpty = false
+				}
+
+				if !smallest.IsEmpty() {
+					b.checkpointMsg <- smallest
+				}
+				areBatchersEmpty = isAllEmpty
+			case pair := <-lastPair:
+				if areBatchersEmpty {
+					b.checkpointMsg <- pair
+				}
+				lastProcessedPair = pair
+			case <-flushBatches:
+				for _, batch := range batchers {
+					batch.Flush()
+				}
+				b.checkpointMsg <- lastProcessedPair
+				areBatchersEmpty = true
+			}
+		}
+	}()
+}
+
 func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error) {
 	// We handle two types of records:
 	// - records emitted from CWLogs Subscription
@@ -140,7 +231,8 @@ func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error)
 }
 
 func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
-	curSequence := b.lastProcessedSeq
+	var pair batcher.SequencePair
+	prevPair := b.lastProcessedSeq
 
 	for _, record := range records {
 		// Wait until rate limiter permits one more record to be processed
@@ -151,77 +243,58 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 			return fmt.Errorf("could not parse sequence number '%s'", record.SequenceNumber)
 		}
 
-		b.lastProcessedSeq = curSequence // Updated with the value from the previous iteration
-		curSequence = batcher.SequencePair{seq, record.SubSequenceNumber}
+		pair = batcher.SequencePair{seq, record.SubSequenceNumber}
+		if prevPair.IsEmpty() { // Handles on-start edge case where b.lastProcessSeq is empty
+			prevPair = pair
+		}
 
 		data, err := base64.StdEncoding.DecodeString(record.Data)
 		if err != nil {
 			return err
 		}
 
-		rawlogs, err := b.splitMessageIfNecessary(data)
+		messages, err := b.splitMessageIfNecessary(data)
 		if err != nil {
 			return err
 		}
-		for _, rawlog := range rawlogs {
-			log, tags, err := b.sender.ProcessMessage(rawlog)
+		for _, rawmsg := range messages {
+			msg, tags, err := b.sender.ProcessMessage(rawmsg)
+
 			if err == ErrMessageIgnored {
 				continue // Skip message
 			} else if err != nil {
-				return err
+				b.log.ErrorD("process-message", kv.M{"msg": err.Error(), "rawmsg": string(rawmsg)})
+				continue // Don't stop processing messages because of one bad message
 			}
 
 			if len(tags) == 0 {
-				return fmt.Errorf("No tags provided by consumer for log: %s", string(rawlog))
+				b.log.ErrorD("no-tags", kv.M{"rawmsg": string(rawmsg)})
+				return fmt.Errorf("No tags provided by consumer for log: %s", string(rawmsg))
 			}
 
 			for _, tag := range tags {
-				batcher, ok := b.batchers[tag]
-				if !ok {
-					batcher = b.createBatcher(tag)
-					b.batchers[tag] = batcher
+				if tag == "" {
+					b.log.ErrorD("blank-tag", kv.M{"rawmsg": string(rawmsg)})
+					return fmt.Errorf("Blank tag provided by consumer for log: %s", string(rawmsg))
 				}
 
 				// Use second to last sequence number to ensure we don't checkpoint a message before
 				// it's been sent.  When batches are sent, conceptually we first find the smallest
 				// sequence number amount all the batch (let's call it A).  We then checkpoint at
 				// the A-1 sequence number.
-				err = batcher.AddMessage(log, b.lastProcessedSeq)
-				if err != nil {
-					return err
-				}
+				b.batchMsg <- tagMsgPair{tag, msg, prevPair}
 			}
 		}
-	}
 
-	b.lastProcessedSeq = curSequence
+		prevPair = pair
+		b.lastProcessedPair <- pair
+	}
+	b.lastProcessedSeq = pair
 
 	return nil
 }
 
-func (b *batchedWriter) CheckPointBatch(tag string) {
-	smallest := b.lastProcessedSeq
-
-	for name, batch := range b.batchers {
-		if tag == name {
-			continue
-		}
-
-		pair := batch.SmallestSequencePair()
-		if pair.Sequence == nil { // Occurs when batch has no items
-			continue
-		}
-
-		if pair.IsLessThan(smallest) {
-			smallest = pair
-		}
-	}
-
-	b.checkpointChan <- smallest
-}
-
 func (b *batchedWriter) SendBatch(batch [][]byte, tag string) {
-	b.log.Info("sent-batch")
 	err := b.sender.SendBatch(batch, tag)
 	switch e := err.(type) {
 	case nil: // Do nothing
@@ -237,14 +310,14 @@ func (b *batchedWriter) SendBatch(batch [][]byte, tag string) {
 		b.log.CriticalD("send-batch", kv.M{"msg": e.Error()})
 		os.Exit(1)
 	}
+
+	b.checkpointTag <- tag
 }
 
 func (b *batchedWriter) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
 		b.log.InfoD("terminate-signal", kv.M{"shard-id": b.shardID})
-		for _, batch := range b.batchers {
-			batch.Flush()
-		}
+		b.flushBatches <- struct{}{}
 	} else {
 		b.log.ErrorD("shutdown-failover", kv.M{"shard-id": b.shardID, "reason": reason})
 	}
