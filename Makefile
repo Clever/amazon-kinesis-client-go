@@ -1,6 +1,10 @@
+include golang.mk
+.DEFAULT_GOAL := test # override default goal set in library makefile
+
 SHELL := /bin/bash
 JAR_DIR := jars
 PKG := github.com/Clever/amazon-kinesis-client-go
+PKGS := $(shell go list ./... | grep -v /vendor )
 .PHONY: download_jars run build
 
 URL_PREFIX := http://search.maven.org/remotecontent?filepath=
@@ -30,6 +34,8 @@ EMPTY :=
 SPACE := $(EMPTY) $(EMPTY)
 JAVA_CLASS_PATH := $(subst $(SPACE),:,$(JARS_TO_DOWNLOAD))
 
+CONSUMER ?= consumer
+
 $(JARS_TO_DOWNLOAD):
 	mkdir -p `dirname $@`
 	curl -s -L -o $@ -O $(URL_PREFIX)`echo $@ | sed 's/$(JAR_DIR)\///g'`
@@ -37,8 +43,23 @@ $(JARS_TO_DOWNLOAD):
 download_jars: $(JARS_TO_DOWNLOAD)
 
 build:
-	CGO_ENABLED=0 go build -installsuffix cgo -o build/consumer $(PKG)/cmd/consumer
+	CGO_ENABLED=0 go build -installsuffix cgo -o build/$(CONSUMER) $(PKG)/cmd/$(CONSUMER)
 
 run: build download_jars
 	command -v java >/dev/null 2>&1 || { echo >&2 "Java not installed. Install java!"; exit 1; }
-	java -cp $(JAVA_CLASS_PATH) com.amazonaws.services.kinesis.multilang.MultiLangDaemon consumer.properties
+	java -cp $(JAVA_CLASS_PATH) \
+	com.amazonaws.services.kinesis.multilang.MultiLangDaemon \
+	$(CONSUMER).properties
+
+bench:
+	go test -bench=. github.com/Clever/amazon-kinesis-client-go/decode/
+
+test: $(PKGS)
+$(PKGS): golang-test-all-deps
+	$(call golang-test-all,$@)
+
+$(GOPATH)/bin/glide:
+	@go get github.com/Masterminds/glide
+
+install_deps: $(GOPATH)/bin/glide
+	@$(GOPATH)/bin/glide install

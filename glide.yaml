@@ -1,0 +1,22 @@
+package: github.com/Clever/amazon-kinesis-client-go
+import:
+- package: github.com/Clever/kinesis-to-firehose
+  subpackages:
+  - writer
+- package: github.com/Clever/syslogparser
+  subpackages:
+  - rfc3164
+- package: github.com/aws/aws-sdk-go
+  subpackages:
+  - aws
+  - aws/session
+  - service/firehose
+- package: golang.org/x/time
+  subpackages:
+  - rate
+testImport:
+- package: github.com/stretchr/testify
+  subpackages:
+  - assert
+- package: gopkg.in/Clever/kayvee-go.v6
+  version: ^6.0.0

@@ -9,8 +9,8 @@ import (
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
-type SampleRecordProcessor struct {
-	checkpointer      *kcl.Checkpointer
+type sampleRecordProcessor struct {
+	checkpointer      kcl.Checkpointer
 	checkpointRetries int
 	checkpointFreq    time.Duration
 	largestSeq        *big.Int
@@ -18,25 +18,25 @@ type SampleRecordProcessor struct {
 	lastCheckpoint    time.Time
 }
 
-func New() *SampleRecordProcessor {
-	return &SampleRecordProcessor{
+func newSampleRecordProcessor() *sampleRecordProcessor {
+	return &sampleRecordProcessor{
 		checkpointRetries: 5,
 		checkpointFreq:    60 * time.Second,
 	}
 }
 
-func (srp *SampleRecordProcessor) Initialize(shardID string, checkpointer *kcl.Checkpointer) error {
+func (srp *sampleRecordProcessor) Initialize(shardID string, checkpointer kcl.Checkpointer) error {
 	srp.lastCheckpoint = time.Now()
 	srp.checkpointer = checkpointer
 	return nil
 }
 
-func (srp *SampleRecordProcessor) shouldUpdateSequence(sequenceNumber *big.Int, subSequenceNumber int) bool {
+func (srp *sampleRecordProcessor) shouldUpdateSequence(sequenceNumber *big.Int, subSequenceNumber int) bool {
 	return srp.largestSeq == nil || sequenceNumber.Cmp(srp.largestSeq) == 1 ||
 		(sequenceNumber.Cmp(srp.largestSeq) == 0 && subSequenceNumber > srp.largestSubSeq)
 }
 
-func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
+func (srp *sampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 	for _, record := range records {
 		seqNumber := new(big.Int)
 		if _, ok := seqNumber.SetString(record.SequenceNumber, 10); !ok {
@@ -56,7 +56,7 @@ func (srp *SampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 	return nil
 }
 
-func (srp *SampleRecordProcessor) Shutdown(reason string) error {
+func (srp *sampleRecordProcessor) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
 		fmt.Fprintf(os.Stderr, "Was told to terminate, will attempt to checkpoint.\n")
 		srp.checkpointer.Shutdown()
@@ -72,6 +72,6 @@ func main() {
 		panic(err)
 	}
 	defer f.Close()
-	kclProcess := kcl.New(os.Stdin, os.Stdout, os.Stderr, New())
+	kclProcess := kcl.New(os.Stdin, os.Stdout, os.Stderr, newSampleRecordProcessor())
 	kclProcess.Run()
 }

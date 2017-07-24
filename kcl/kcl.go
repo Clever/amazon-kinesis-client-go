@@ -12,9 +12,15 @@ import (
 )
 
 type RecordProcessor interface {
-	Initialize(shardID string, checkpointer *Checkpointer) error
+	Initialize(shardID string, checkpointer Checkpointer) error
 	ProcessRecords(records []Record) error
 	Shutdown(reason string) error
+}
+
+type Checkpointer interface {
+	Checkpoint(sequenceNumber *string, subSequenceNumber *int) error
+	CheckpointWithRetry(sequenceNumber *string, subSequenceNumber *int, retryCount int) error
+	Shutdown()
 }
 
 type CheckpointError struct {
@@ -25,13 +31,13 @@ func (ce CheckpointError) Error() string {
 	return ce.e
 }
 
-type Checkpointer struct {
+type checkpointer struct {
 	mux sync.Mutex
 
 	ioHandler ioHandler
 }
 
-func (c *Checkpointer) getAction() (interface{}, error) {
+func (c *checkpointer) getAction() (interface{}, error) {
 	line, err := c.ioHandler.readLine()
 	if err != nil {
 		return nil, err
@@ -43,7 +49,7 @@ func (c *Checkpointer) getAction() (interface{}, error) {
 	return action, nil
 }
 
-func (c *Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
+func (c *checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
@@ -74,7 +80,7 @@ func (c *Checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int
 
 // CheckpointWithRetry tries to save a checkPoint up to `retryCount` + 1 times.
 // `retryCount` should be >= 0
-func (c *Checkpointer) CheckpointWithRetry(
+func (c *checkpointer) CheckpointWithRetry(
 	sequenceNumber *string, subSequenceNumber *int, retryCount int,
 ) error {
 	sleepDuration := 5 * time.Second
@@ -108,7 +114,7 @@ func (c *Checkpointer) CheckpointWithRetry(
 	return nil
 }
 
-func (c *Checkpointer) Shutdown() {
+func (c *checkpointer) Shutdown() {
 	c.CheckpointWithRetry(nil, nil, 5)
 }
 
@@ -225,7 +231,7 @@ func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor R
 	}
 	return &KCLProcess{
 		ioHandler: i,
-		checkpointer: &Checkpointer{
+		checkpointer: &checkpointer{
 			ioHandler: i,
 		},
 		recordProcessor: recordProcessor,
@@ -234,7 +240,7 @@ func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor R
 
 type KCLProcess struct {
 	ioHandler       ioHandler
-	checkpointer    *Checkpointer
+	checkpointer    Checkpointer
 	recordProcessor RecordProcessor
 }
 
@@ -278,11 +284,17 @@ func (kclp *KCLProcess) Run() {
 	for {
 		line, err := kclp.ioHandler.readLine()
 		if err != nil {
-			kclp.ioHandler.writeError(err.Error())
+			kclp.ioHandler.writeError("Read line error: " + err.Error())
 			return
 		} else if line == nil {
-			break
+			kclp.ioHandler.writeError("Empty read line recieved")
+			return
 		}
-		kclp.handleLine(line.String())
+
+		err = kclp.handleLine(line.String())
+		if err != nil {
+			kclp.ioHandler.writeError("Handle line error: " + err.Error())
+			return
+		}
 	}
 }
