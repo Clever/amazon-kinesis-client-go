@@ -63,8 +63,9 @@ func withDefaults(config Config) Config {
 		config.DeployEnv = "unknown-env"
 	}
 
+	// Not totally clear we need this rate limit.  The KCL may do rate limiting for us.
 	if config.ReadRateLimit == 0 {
-		config.ReadRateLimit = 300
+		config.ReadRateLimit = 1000
 	}
 	if config.ReadBurstLimit == 0 {
 		config.ReadBurstLimit = int(float64(config.ReadRateLimit)*1.2 + 0.5)
