@@ -11,6 +11,7 @@ compile:
   override:
   - make install_deps
   - make build
+  - make bench
 test:
   override:
   - make test
