@@ -319,9 +319,14 @@ func ExtractKVMeta(kvlog map[string]interface{}) KVMeta {
 
 	tmp, ok = kvmeta["routes"]
 	if ok {
-		routes, ok := tmp.([]map[string]interface{})
+		routes, ok := tmp.([]interface{})
 		if ok {
-			kvRoutes = routes
+			for _, route := range routes {
+				rule, ok := route.(map[string]interface{})
+				if ok { // TODO: log error
+					kvRoutes = append(kvRoutes, rule)
+				}
+			}
 		}
 	}
 

@@ -551,7 +551,7 @@ func TestExtractKVMeta(t *testing.T) {
 					"team":        "green",
 					"kv_version":  "three",
 					"kv_language": "tree",
-					"routes": []map[string]interface{}{
+					"routes": []interface{}{
 						map[string]interface{}{
 							"type":        "metrics",
 							"rule":        "cool",
@@ -590,7 +590,7 @@ func TestExtractKVMeta(t *testing.T) {
 					"team":        "green",
 					"kv_version":  "christmas",
 					"kv_language": "tree",
-					"routes": []map[string]interface{}{
+					"routes": []interface{}{
 						map[string]interface{}{
 							"type":   "analytics",
 							"rule":   "what's-this?",
@@ -632,7 +632,7 @@ func TestExtractKVMeta(t *testing.T) {
 					"team":        "slack",
 					"kv_version":  "evergreen",
 					"kv_language": "markdown-ish",
-					"routes": []map[string]interface{}{
+					"routes": []interface{}{
 						map[string]interface{}{
 							"type":    "notifications",
 							"rule":    "did-you-know",
@@ -678,7 +678,7 @@ func TestExtractKVMeta(t *testing.T) {
 					"team":        "a-team",
 					"kv_version":  "old",
 					"kv_language": "jive",
-					"routes": []map[string]interface{}{
+					"routes": []interface{}{
 						map[string]interface{}{
 							"type":        "alerts",
 							"rule":        "last-call",
@@ -740,7 +740,7 @@ func TestExtractKVMeta(t *testing.T) {
 					"team":        "diversity",
 					"kv_version":  "kv-routes",
 					"kv_language": "understanding",
-					"routes": []map[string]interface{}{
+					"routes": []interface{}{
 						map[string]interface{}{
 							"type":       "metrics",
 							"rule":       "all-combos",
