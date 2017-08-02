@@ -2,36 +2,11 @@ package batcher
 
 import (
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
+
+	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
-
-// SequencePair a convience way to pass around a Sequence / SubSequence pair
-type SequencePair struct {
-	Sequence    *big.Int
-	SubSequence int
-}
-
-func (s SequencePair) IsEmpty() bool {
-	return s.Sequence == nil
-}
-
-func (s SequencePair) IsLessThan(pair SequencePair) bool {
-	if s.IsEmpty() || pair.IsEmpty() { // empty pairs are incomparable
-		return false
-	}
-
-	cmp := s.Sequence.Cmp(pair.Sequence)
-	if cmp == -1 {
-		return true
-	}
-	if cmp == 1 {
-		return false
-	}
-
-	return s.SubSequence < pair.SubSequence
-}
 
 // Sync is used to allow a writer to syncronize with the batcher.
 // The writer declares how to write messages (via its `SendBatch` method), while the batcher
@@ -43,17 +18,17 @@ type Sync interface {
 // Batcher interface
 type Batcher interface {
 	// AddMesage to the batch
-	AddMessage(msg []byte, sequencePair SequencePair) error
+	AddMessage(msg []byte, sequencePair kcl.SequencePair) error
 	// Flush all messages from the batch
 	Flush()
 	// SmallestSeqPair returns the smallest SequenceNumber and SubSequence number in
 	// the current batch
-	SmallestSequencePair() SequencePair
+	SmallestSequencePair() kcl.SequencePair
 }
 
 type msgPack struct {
 	msg          []byte
-	sequencePair SequencePair
+	sequencePair kcl.SequencePair
 }
 
 type batcher struct {
@@ -64,7 +39,7 @@ type batcher struct {
 	flushSize     int
 
 	// smallestSeq are used for checkpointing
-	smallestSeq SequencePair
+	smallestSeq kcl.SequencePair
 
 	sync      Sync
 	msgChan   chan<- msgPack
@@ -104,7 +79,7 @@ func New(sync Sync, flushInterval time.Duration, flushCount int, flushSize int) 
 	return b, nil
 }
 
-func (b *batcher) SmallestSequencePair() SequencePair {
+func (b *batcher) SmallestSequencePair() kcl.SequencePair {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
@@ -123,7 +98,7 @@ func (b *batcher) SetFlushSize(size int) {
 	b.flushSize = size
 }
 
-func (b *batcher) AddMessage(msg []byte, pair SequencePair) error {
+func (b *batcher) AddMessage(msg []byte, pair kcl.SequencePair) error {
 	if len(msg) <= 0 {
 		return fmt.Errorf("Empty messages can't be sent")
 	}
@@ -135,7 +110,7 @@ func (b *batcher) AddMessage(msg []byte, pair SequencePair) error {
 // updateSequenceNumbers is used to track the smallest sequenceNumber of any record in the batch.
 // When flush() is called, the batcher sends the sequence number to the writer. When the writer
 // checkpoints, it does so up to the latest message that was flushed successfully.
-func (b *batcher) updateSequenceNumbers(pair SequencePair) {
+func (b *batcher) updateSequenceNumbers(pair kcl.SequencePair) {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
@@ -162,7 +137,7 @@ func (b *batcher) flush(batch [][]byte) [][]byte {
 		b.sync.SendBatch(batch)
 
 		b.mux.Lock()
-		b.smallestSeq = SequencePair{nil, 0}
+		b.smallestSeq = kcl.SequencePair{}
 		b.mux.Unlock()
 	}
 	return [][]byte{}

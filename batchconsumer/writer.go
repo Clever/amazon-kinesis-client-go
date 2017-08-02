@@ -19,7 +19,7 @@ import (
 type tagMsgPair struct {
 	tag  string
 	msg  []byte
-	pair batcher.SequencePair
+	pair kcl.SequencePair
 }
 
 type batchedWriter struct {
@@ -29,16 +29,16 @@ type batchedWriter struct {
 
 	shardID string
 
-	checkpointMsg     chan batcher.SequencePair
+	checkpointMsg     chan kcl.SequencePair
 	checkpointTag     chan string
-	lastProcessedPair chan batcher.SequencePair
+	lastProcessedPair chan kcl.SequencePair
 	batchMsg          chan tagMsgPair
 	flushBatches      chan struct{}
 
 	// Limits the number of records read from the stream
 	rateLimiter *rate.Limiter
 
-	lastProcessedSeq batcher.SequencePair
+	lastProcessedSeq kcl.SequencePair
 }
 
 func NewBatchedWriter(config Config, sender Sender, log kv.KayveeLogger) *batchedWriter {
@@ -53,13 +53,13 @@ func NewBatchedWriter(config Config, sender Sender, log kv.KayveeLogger) *batche
 
 func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer) error {
 	b.shardID = shardID
-	b.checkpointMsg = make(chan batcher.SequencePair)
+	b.checkpointMsg = make(chan kcl.SequencePair)
 	b.startCheckpointListener(checkpointer, b.checkpointMsg)
 
 	b.checkpointTag = make(chan string)
 	b.batchMsg = make(chan tagMsgPair)
 	b.flushBatches = make(chan struct{})
-	b.lastProcessedPair = make(chan batcher.SequencePair)
+	b.lastProcessedPair = make(chan kcl.SequencePair)
 	b.startMessageHandler(b.batchMsg, b.checkpointTag, b.lastProcessedPair, b.flushBatches)
 
 	return nil
@@ -95,7 +95,7 @@ func (b *batchedWriter) handleCheckpointError(err error) bool {
 }
 
 func (b *batchedWriter) startCheckpointListener(
-	checkpointer kcl.Checkpointer, checkpointMsg <-chan batcher.SequencePair,
+	checkpointer kcl.Checkpointer, checkpointMsg <-chan kcl.SequencePair,
 ) {
 	go func() {
 		lastCheckpoint := time.Now()
@@ -152,11 +152,11 @@ func (b *batchedWriter) createBatcher(tag string) batcher.Batcher {
 // startMessageDistributer starts a go-routine that routes messages to batches.  It's in uses a
 // go routine to avoid racey conditions.
 func (b *batchedWriter) startMessageHandler(
-	batchMsg <-chan tagMsgPair, checkpointTag <-chan string, lastPair <-chan batcher.SequencePair,
+	batchMsg <-chan tagMsgPair, checkpointTag <-chan string, lastPair <-chan kcl.SequencePair,
 	flushBatches <-chan struct{},
 ) {
 	go func() {
-		var lastProcessedPair batcher.SequencePair
+		var lastProcessedPair kcl.SequencePair
 		batchers := map[string]batcher.Batcher{}
 		areBatchersEmpty := true
 
@@ -231,7 +231,7 @@ func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error)
 }
 
 func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
-	var pair batcher.SequencePair
+	var pair kcl.SequencePair
 	prevPair := b.lastProcessedSeq
 
 	for _, record := range records {
@@ -243,7 +243,7 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 			return fmt.Errorf("could not parse sequence number '%s'", record.SequenceNumber)
 		}
 
-		pair = batcher.SequencePair{seq, record.SubSequenceNumber}
+		pair = kcl.SequencePair{seq, record.SubSequenceNumber}
 		if prevPair.IsEmpty() { // Handles on-start edge case where b.lastProcessSeq is empty
 			prevPair = pair
 		}
