@@ -86,30 +86,28 @@ type mockCheckpointer struct {
 	shutdown          chan struct{}
 }
 
-func NewMockCheckpointer(maxSeq string, timeout time.Duration) *mockCheckpointer {
+func NewMockCheckpointer(timeout time.Duration) *mockCheckpointer {
 	mcp := &mockCheckpointer{
 		checkpoint: make(chan string),
 		done:       make(chan struct{}, 1),
 		timeout:    make(chan struct{}, 1),
 		shutdown:   make(chan struct{}),
 	}
-	mcp.startWaiter(maxSeq, timeout)
+	mcp.startWaiter(timeout)
 
 	return mcp
 }
 
-func (m *mockCheckpointer) startWaiter(maxSeq string, timeout time.Duration) {
+func (m *mockCheckpointer) startWaiter(timeout time.Duration) {
 	go func() {
 		for {
 			select {
 			case seq := <-m.checkpoint:
 				m.recievedSequences = append(m.recievedSequences, seq)
-				if seq == maxSeq {
-					m.done <- struct{}{}
-				}
 			case <-time.NewTimer(timeout).C:
 				m.timeout <- struct{}{}
 			case <-m.shutdown:
+				m.done <- struct{}{}
 				return
 			}
 		}
@@ -126,14 +124,9 @@ func (m *mockCheckpointer) wait() error {
 func (m *mockCheckpointer) Shutdown() {
 	m.shutdown <- struct{}{}
 }
-func (m *mockCheckpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
-	m.checkpoint <- *sequenceNumber
+func (m *mockCheckpointer) Checkpoint(pair kcl.SequencePair, retry int) error {
+	m.checkpoint <- pair.Sequence.String()
 	return nil
-}
-func (m *mockCheckpointer) CheckpointWithRetry(
-	sequenceNumber *string, subSequenceNumber *int, retryCount int,
-) error {
-	return m.Checkpoint(sequenceNumber, subSequenceNumber)
 }
 
 func encode(str string) string {
@@ -148,7 +141,7 @@ func TestProcessRecordsIgnoredMessages(t *testing.T) {
 		BatchInterval:  10 * time.Millisecond,
 		CheckpointFreq: 20 * time.Millisecond,
 	})
-	mockcheckpointer := NewMockCheckpointer("4", 5*time.Second)
+	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 
 	wrt := NewBatchedWriter(mockconfig, ignoringSender{}, mocklog)
 	wrt.Initialize("test-shard", mockcheckpointer)
@@ -161,8 +154,13 @@ func TestProcessRecordsIgnoredMessages(t *testing.T) {
 	})
 	assert.NoError(err)
 
+	err = wrt.Shutdown("TERMINATE")
+	assert.NoError(err)
+
 	err = mockcheckpointer.wait()
 	assert.NoError(err)
+
+	assert.Contains(mockcheckpointer.recievedSequences, "4")
 }
 
 func TestProcessRecordsMutliBatchBasic(t *testing.T) {
@@ -173,7 +171,7 @@ func TestProcessRecordsMutliBatchBasic(t *testing.T) {
 		BatchInterval:  100 * time.Millisecond,
 		CheckpointFreq: 200 * time.Millisecond,
 	})
-	mockcheckpointer := NewMockCheckpointer("8", 5*time.Second)
+	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
 	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
@@ -233,7 +231,7 @@ func TestProcessRecordsMutliBatchWithIgnores(t *testing.T) {
 		BatchInterval:  100 * time.Millisecond,
 		CheckpointFreq: 200 * time.Millisecond,
 	})
-	mockcheckpointer := NewMockCheckpointer("26", 5*time.Second)
+	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
 	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
@@ -312,7 +310,7 @@ func TestStaggeredCheckpionting(t *testing.T) {
 		BatchInterval:  100 * time.Millisecond,
 		CheckpointFreq: 200 * time.Nanosecond,
 	})
-	mockcheckpointer := NewMockCheckpointer("9", 5*time.Second)
+	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
 	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
@@ -352,6 +350,7 @@ func TestStaggeredCheckpionting(t *testing.T) {
 	assert.NotContains(mockcheckpointer.recievedSequences, "6")
 	assert.NotContains(mockcheckpointer.recievedSequences, "7")
 	assert.NotContains(mockcheckpointer.recievedSequences, "8")
+	assert.Contains(mockcheckpointer.recievedSequences, "9")
 
 	assert.Contains(mocksender.batches, "tag1")
 	assert.Equal(2, len(mocksender.batches["tag1"]))    // One batch
@@ -365,8 +364,10 @@ func TestStaggeredCheckpionting(t *testing.T) {
 	assert.Equal(2, len(mocksender.batches["tag3"][0])) // with three items
 	assert.Equal("tag3", string(mocksender.batches["tag3"][0][0]))
 	assert.Equal("tag3", string(mocksender.batches["tag3"][0][1]))
+	assert.Equal(2, len(mocksender.batches["tag3"][1]))
 	assert.Equal("tag3", string(mocksender.batches["tag3"][1][0]))
 	assert.Equal("tag3", string(mocksender.batches["tag3"][1][1]))
+	assert.Equal(2, len(mocksender.batches["tag3"][2]))
 	assert.Equal("tag3", string(mocksender.batches["tag3"][2][0]))
 	assert.Equal("tag3", string(mocksender.batches["tag3"][2][1]))
 }

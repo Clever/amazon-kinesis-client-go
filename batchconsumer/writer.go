@@ -32,7 +32,7 @@ type batchedWriter struct {
 	checkpointMsg      chan kcl.SequencePair
 	checkpointShutdown chan struct{}
 	checkpointTag      chan string
-	lastProcessedPair  chan kcl.SequencePair
+	lastIgnoredPair    chan kcl.SequencePair
 	batchMsg           chan tagMsgPair
 	shutdown           chan struct{}
 
@@ -58,11 +58,11 @@ func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer
 	b.checkpointShutdown = make(chan struct{})
 	b.startCheckpointListener(checkpointer, b.checkpointMsg, b.checkpointShutdown)
 
-	b.checkpointTag = make(chan string)
+	b.checkpointTag = make(chan string, 100) // Buffered to workaround
 	b.batchMsg = make(chan tagMsgPair)
 	b.shutdown = make(chan struct{})
-	b.lastProcessedPair = make(chan kcl.SequencePair)
-	b.startMessageHandler(b.batchMsg, b.checkpointTag, b.lastProcessedPair, b.shutdown)
+	b.lastIgnoredPair = make(chan kcl.SequencePair)
+	b.startMessageHandler(b.batchMsg, b.checkpointTag, b.lastIgnoredPair, b.shutdown)
 
 	return nil
 }
@@ -128,32 +128,48 @@ func (b *batchedWriter) createBatcher(tag string) batcher.Batcher {
 // startMessageDistributer starts a go-routine that routes messages to batches.  It's in uses a
 // go routine to avoid racey conditions.
 func (b *batchedWriter) startMessageHandler(
-	batchMsg <-chan tagMsgPair, checkpointTag <-chan string, lastPair <-chan kcl.SequencePair,
+	batchMsg <-chan tagMsgPair, checkpointTag <-chan string, lastIgnored <-chan kcl.SequencePair,
 	shutdown <-chan struct{},
 ) {
-	go func() {
-		var lastProcessedPair kcl.SequencePair
-		batchers := map[string]batcher.Batcher{}
-		areBatchersEmpty := true
+	getBatcher := make(chan string)
+	rtnBatcher := make(chan batcher.Batcher)
+	shutdownAdder := make(chan struct{})
 
+	go func() {
 		for {
 			select {
 			case tmp := <-batchMsg:
-				batcher, ok := batchers[tmp.tag]
-				if !ok {
-					batcher = b.createBatcher(tmp.tag)
-					batchers[tmp.tag] = batcher
-				}
-
+				getBatcher <- tmp.tag
+				batcher := <-rtnBatcher
 				err := batcher.AddMessage(tmp.msg, tmp.pair)
 				if err != nil {
 					b.log.ErrorD("add-message", kv.M{
 						"err": err.Error(), "msg": string(tmp.msg), "tag": tmp.tag,
 					})
 				}
+			case <-shutdownAdder:
+			}
+		}
+	}()
+
+	go func() {
+		var lastIgnoredPair kcl.SequencePair
+		batchers := map[string]batcher.Batcher{}
+		areBatchersEmpty := true
+
+		for {
+			select {
+			case tag := <-getBatcher:
+				batcher, ok := batchers[tag]
+				if !ok {
+					batcher = b.createBatcher(tag)
+					batchers[tag] = batcher
+				}
+
 				areBatchersEmpty = false
+				rtnBatcher <- batcher
 			case tag := <-checkpointTag:
-				smallest := lastProcessedPair
+				smallest := lastIgnoredPair
 				isAllEmpty := true
 
 				for name, batch := range batchers {
@@ -166,7 +182,8 @@ func (b *batchedWriter) startMessageHandler(
 						continue
 					}
 
-					if pair.IsLessThan(smallest) {
+					// Check for empty because it's possible that no messages have been ignored
+					if smallest.IsEmpty() || pair.IsLessThan(smallest) {
 						smallest = pair
 					}
 
@@ -177,17 +194,18 @@ func (b *batchedWriter) startMessageHandler(
 					b.checkpointMsg <- smallest
 				}
 				areBatchersEmpty = isAllEmpty
-			case pair := <-lastPair:
-				if areBatchersEmpty {
+			case pair := <-lastIgnored:
+				if areBatchersEmpty && !pair.IsEmpty() {
 					b.checkpointMsg <- pair
 				}
-				lastProcessedPair = pair
+				lastIgnoredPair = pair
 			case <-shutdown:
 				for _, batch := range batchers {
 					batch.Flush()
 				}
-				b.checkpointMsg <- lastProcessedPair
+				b.checkpointMsg <- b.lastProcessedSeq
 				b.checkpointShutdown <- struct{}{}
+
 				areBatchersEmpty = true
 			}
 		}
@@ -234,6 +252,7 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 		if err != nil {
 			return err
 		}
+		wasPairIgnored := true
 		for _, rawmsg := range messages {
 			msg, tags, err := b.sender.ProcessMessage(rawmsg)
 
@@ -260,11 +279,14 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 				// sequence number amount all the batch (let's call it A).  We then checkpoint at
 				// the A-1 sequence number.
 				b.batchMsg <- tagMsgPair{tag, msg, prevPair}
+				wasPairIgnored = false
 			}
 		}
 
 		prevPair = pair
-		b.lastProcessedPair <- pair
+		if wasPairIgnored {
+			b.lastIgnoredPair <- pair
+		}
 	}
 	b.lastProcessedSeq = pair
 

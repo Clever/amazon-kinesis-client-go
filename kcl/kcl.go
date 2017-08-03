@@ -2,12 +2,10 @@ package kcl
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"time"
 )
 
@@ -18,8 +16,7 @@ type RecordProcessor interface {
 }
 
 type Checkpointer interface {
-	Checkpoint(sequenceNumber *string, subSequenceNumber *int) error
-	CheckpointWithRetry(sequenceNumber *string, subSequenceNumber *int, retryCount int) error
+	Checkpoint(pair SequencePair, retryCount int) error
 	Shutdown()
 }
 
@@ -29,93 +26,6 @@ type CheckpointError struct {
 
 func (ce CheckpointError) Error() string {
 	return ce.e
-}
-
-type checkpointer struct {
-	mux sync.Mutex
-
-	ioHandler ioHandler
-}
-
-func (c *checkpointer) getAction() (interface{}, error) {
-	line, err := c.ioHandler.readLine()
-	if err != nil {
-		return nil, err
-	}
-	action, err := c.ioHandler.loadAction(line.String())
-	if err != nil {
-		return nil, err
-	}
-	return action, nil
-}
-
-func (c *checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	c.ioHandler.writeAction(ActionCheckpoint{
-		Action:            "checkpoint",
-		SequenceNumber:    sequenceNumber,
-		SubSequenceNumber: subSequenceNumber,
-	})
-	line, err := c.ioHandler.readLine()
-	if err != nil {
-		return err
-	}
-	actionI, err := c.ioHandler.loadAction(line.String())
-	if err != nil {
-		return err
-	}
-	action, ok := actionI.(ActionCheckpoint)
-	if !ok {
-		return fmt.Errorf("expected checkpoint response, got '%s'", line.String())
-	}
-	if action.Error != nil && *action.Error != "" {
-		return CheckpointError{
-			e: *action.Error,
-		}
-	}
-	return nil
-}
-
-// CheckpointWithRetry tries to save a checkPoint up to `retryCount` + 1 times.
-// `retryCount` should be >= 0
-func (c *checkpointer) CheckpointWithRetry(
-	sequenceNumber *string, subSequenceNumber *int, retryCount int,
-) error {
-	sleepDuration := 5 * time.Second
-
-	for n := 0; n <= retryCount; n++ {
-		err := c.Checkpoint(sequenceNumber, subSequenceNumber)
-		if err == nil {
-			return nil
-		}
-
-		if cperr, ok := err.(CheckpointError); ok {
-			switch cperr.Error() {
-			case "ShutdownException":
-				return fmt.Errorf("Encountered shutdown exception, skipping checkpoint")
-			case "ThrottlingException":
-				fmt.Fprintf(os.Stderr, "Was throttled while checkpointing, will attempt again in %s\n", sleepDuration)
-			case "InvalidStateException":
-				fmt.Fprintf(os.Stderr, "MultiLangDaemon reported an invalid state while checkpointing\n")
-			default:
-				fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", err)
-			}
-		}
-
-		if n == retryCount {
-			return fmt.Errorf("Failed to checkpoint after %d attempts, giving up.", retryCount)
-		}
-
-		time.Sleep(sleepDuration)
-	}
-
-	return nil
-}
-
-func (c *checkpointer) Shutdown() {
-	c.CheckpointWithRetry(nil, nil, 5)
 }
 
 type ioHandler struct {
@@ -134,13 +44,13 @@ func (i ioHandler) writeError(message string) {
 	fmt.Fprintf(i.errorFile, "%s\n", message)
 }
 
-func (i ioHandler) readLine() (*bytes.Buffer, error) {
+func (i ioHandler) readLine() (string, error) {
 	bio := bufio.NewReader(i.inputFile)
 	line, err := bio.ReadString('\n')
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return bytes.NewBufferString(line), nil
+	return line, nil
 }
 
 type ActionInitialize struct {
@@ -197,6 +107,8 @@ func (i ioHandler) loadAction(line string) (interface{}, error) {
 			return nil, err
 		}
 		return actionProcessRecords, nil
+	case "shutdownRequested":
+		fallthrough
 	case "shutdown":
 		var actionShutdown ActionShutdown
 		if err := json.Unmarshal(lineBytes, &actionShutdown); err != nil {
@@ -223,25 +135,37 @@ func (i ioHandler) writeAction(action interface{}) error {
 	return nil
 }
 
-func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor RecordProcessor) *KCLProcess {
+func New(
+	inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor RecordProcessor,
+) *KCLProcess {
 	i := ioHandler{
 		inputFile:  inputFile,
 		outputFile: outputFile,
 		errorFile:  errorFile,
 	}
 	return &KCLProcess{
-		ioHandler: i,
-		checkpointer: &checkpointer{
-			ioHandler: i,
-		},
+		ioHandler:       i,
 		recordProcessor: recordProcessor,
+
+		next:   make(chan struct{}),
+		out:    make(chan string),
+		outErr: make(chan error),
+
+		checkpoint:    make(chan SequencePair),
+		checkpointErr: make(chan error),
 	}
 }
 
 type KCLProcess struct {
 	ioHandler       ioHandler
-	checkpointer    Checkpointer
 	recordProcessor RecordProcessor
+
+	next   chan struct{}
+	out    chan string
+	outErr chan error
+
+	checkpoint    chan SequencePair
+	checkpointErr chan error
 }
 
 func (kclp *KCLProcess) reportDone(responseFor string) error {
@@ -257,13 +181,13 @@ func (kclp *KCLProcess) reportDone(responseFor string) error {
 func (kclp *KCLProcess) performAction(a interface{}) (string, error) {
 	switch action := a.(type) {
 	case ActionInitialize:
-		return action.Action, kclp.recordProcessor.Initialize(action.ShardID, kclp.checkpointer)
+		return action.Action, kclp.recordProcessor.Initialize(action.ShardID, kclp)
 	case ActionProcessRecords:
 		return action.Action, kclp.recordProcessor.ProcessRecords(action.Records)
 	case ActionShutdown:
 		return action.Action, kclp.recordProcessor.Shutdown(action.Reason)
 	default:
-		return "", fmt.Errorf("unknown action to dispatch: %s", action)
+		return "", fmt.Errorf("unknown action to dispatch: %+#v", action)
 	}
 }
 
@@ -280,20 +204,124 @@ func (kclp *KCLProcess) handleLine(line string) error {
 	return kclp.reportDone(responseFor)
 }
 
-func (kclp *KCLProcess) Run() {
-	for {
-		line, err := kclp.ioHandler.readLine()
-		if err != nil {
-			kclp.ioHandler.writeError("Read line error: " + err.Error())
-			return
-		} else if line == nil {
-			kclp.ioHandler.writeError("Empty read line recieved")
-			return
+func (kclp *KCLProcess) Checkpoint(pair SequencePair, retryCount int) error {
+	sleepDuration := 5 * time.Second
+
+	for n := 0; n <= retryCount; n++ {
+		kclp.checkpoint <- pair
+		err := <-kclp.checkpointErr
+		if err == nil {
+			return nil
 		}
 
-		err = kclp.handleLine(line.String())
-		if err != nil {
-			kclp.ioHandler.writeError("Handle line error: " + err.Error())
+		if cperr, ok := err.(CheckpointError); ok {
+			switch cperr.Error() {
+			case "ShutdownException":
+				return fmt.Errorf("Encountered shutdown exception, skipping checkpoint")
+			case "ThrottlingException":
+				fmt.Fprintf(os.Stderr, "Checkpointing throttling, pause for %s\n", sleepDuration)
+			case "InvalidStateException":
+				fmt.Fprintf(os.Stderr, "MultiLangDaemon invalid state while checkpointing\n")
+			default:
+				fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", err)
+			}
+		}
+
+		if n == retryCount {
+			return fmt.Errorf("Failed to checkpoint after %d attempts, giving up.", retryCount)
+		}
+
+		time.Sleep(sleepDuration)
+	}
+
+	return nil
+}
+
+func (kclp *KCLProcess) Shutdown() {
+	kclp.Checkpoint(SequencePair{}, 5)
+}
+
+func (kclp *KCLProcess) processCheckpoint(pair SequencePair) error {
+	var seq *string
+	var subSeq *int
+	if !pair.IsEmpty() { // an empty pair is a signal to shutdown
+		tmp := pair.Sequence.String()
+		seq = &tmp
+		subSeq = &pair.SubSequence
+	}
+	kclp.ioHandler.writeAction(ActionCheckpoint{
+		Action:            "checkpoint",
+		SequenceNumber:    seq,
+		SubSequenceNumber: subSeq,
+	})
+	line, err := kclp.ioHandler.readLine()
+	if err != nil {
+		return err
+	}
+	actionI, err := kclp.ioHandler.loadAction(line)
+	if err != nil {
+		return err
+	}
+	action, ok := actionI.(ActionCheckpoint)
+	if !ok {
+		return fmt.Errorf("expected checkpoint response, got '%s'", line)
+	}
+	if action.Error != nil && *action.Error != "" {
+		return CheckpointError{e: *action.Error}
+	}
+	return nil
+}
+
+func (kclp *KCLProcess) startLineProcessor(
+	next chan struct{}, out chan string, outErr chan error,
+	checkpoint chan SequencePair, checkpointErr chan error,
+) {
+	go func() {
+		for {
+			select {
+			case <-next:
+				line, err := kclp.ioHandler.readLine()
+				if err != nil {
+					outErr <- err
+				} else {
+					out <- line
+				}
+			case pair := <-checkpoint:
+				err := kclp.processCheckpoint(pair)
+				checkpointErr <- err
+			}
+		}
+	}()
+}
+
+func (kclp *KCLProcess) processNextLine() error {
+	kclp.next <- struct{}{} // We're ready for a new line
+
+	var err error
+	var line string
+
+	select {
+	case err = <-kclp.outErr:
+	case line = <-kclp.out:
+		if line == "" {
+			err = fmt.Errorf("Empty read line recieved")
+		} else {
+			err = kclp.handleLine(line)
+		}
+	}
+
+	return err
+}
+
+func (kclp *KCLProcess) Run() {
+	kclp.startLineProcessor(kclp.next, kclp.out, kclp.outErr, kclp.checkpoint, kclp.checkpointErr)
+	for {
+		err := kclp.processNextLine()
+		if err == io.EOF {
+			kclp.ioHandler.writeError("IO stream closed")
+			return
+		} else if err != nil {
+			kclp.ioHandler.writeError(fmt.Sprintf("ERR Handle line: %+#v", err))
 			return
 		}
 	}
