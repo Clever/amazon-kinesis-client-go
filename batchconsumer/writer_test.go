@@ -192,8 +192,6 @@ func TestProcessRecordsMutliBatchBasic(t *testing.T) {
 	})
 	assert.NoError(err)
 
-	time.Sleep(200 * time.Millisecond) // Sleep to ensure checkpoint get flushed at least once
-
 	err = wrt.Shutdown("TERMINATE")
 	assert.NoError(err)
 
@@ -270,8 +268,6 @@ func TestProcessRecordsMutliBatchWithIgnores(t *testing.T) {
 	})
 	assert.NoError(err)
 
-	time.Sleep(200 * time.Millisecond) // Sleep to ensure checkpoint get flushed at least once
-
 	err = wrt.Shutdown("TERMINATE")
 	assert.NoError(err)
 
@@ -341,7 +337,6 @@ func TestStaggeredCheckpionting(t *testing.T) {
 	assert.NoError(err)
 
 	mocksender.Shutdown()
-	mockcheckpointer.Shutdown()
 
 	// Test to make sure writer doesn't prematurely checkpoint messages
 	// Checkpoints 5,6,7,8 will never be submitted because the 3rd "tag1" is in a batch

@@ -18,6 +18,7 @@ type Config struct {
 
 	// LogFile where consumer errors and failed log lines are saved
 	LogFile string
+
 	// BatchInterval the upper bound on how often SendBatch is called with accumulated messages
 	BatchInterval time.Duration
 	// BatchCount is the number of messages that triggers a SendBatch call
