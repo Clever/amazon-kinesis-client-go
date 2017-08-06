@@ -11,8 +11,7 @@ import (
 type checkpointManager struct {
 	log kv.KayveeLogger
 
-	checkpointRetries int
-	checkpointFreq    time.Duration
+	checkpointFreq time.Duration
 
 	checkpoint chan kcl.SequencePair
 	shutdown   chan struct{}
@@ -24,8 +23,7 @@ func NewCheckpointManager(
 	cm := &checkpointManager{
 		log: log,
 
-		checkpointRetries: config.CheckpointRetries,
-		checkpointFreq:    config.CheckpointFreq,
+		checkpointFreq: config.CheckpointFreq,
 
 		checkpoint: make(chan kcl.SequencePair),
 		shutdown:   make(chan struct{}),
@@ -72,12 +70,8 @@ func (cm *checkpointManager) startCheckpointHandler(
 			}
 
 			if !pair.IsEmpty() {
-				err := checkpointer.Checkpoint(pair, cm.checkpointRetries)
-				if err != nil {
-					cm.log.ErrorD("checkpoint-err", kv.M{"msg": err.Error()})
-				} else {
-					lastCheckpoint = time.Now()
-				}
+				checkpointer.Checkpoint(pair)
+				lastCheckpoint = time.Now()
 			}
 
 			if isShuttingDown {

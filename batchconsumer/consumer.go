@@ -33,10 +33,6 @@ type Config struct {
 
 	// CheckpointFreq the frequency in which a checkpoint is saved
 	CheckpointFreq time.Duration
-	// CheckpointRetries the number of times the consumer will try to save a checkpoint
-	CheckpointRetries int
-	// CheckpointRetrySleep the amount of time between checkpoint save attempts
-	CheckpointRetrySleep time.Duration
 }
 
 // BatchConsumer is responsible for marshalling
@@ -74,12 +70,6 @@ func withDefaults(config Config) Config {
 
 	if config.CheckpointFreq == 0 {
 		config.CheckpointFreq = 60 * time.Second
-	}
-	if config.CheckpointRetries == 0 {
-		config.CheckpointRetries = 5
-	}
-	if config.CheckpointRetrySleep == 0 {
-		config.CheckpointRetrySleep = 5 * time.Second
 	}
 
 	return config
