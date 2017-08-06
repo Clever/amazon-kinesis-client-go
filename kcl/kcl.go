@@ -281,11 +281,13 @@ func (kclp *KCLProcess) startLineProcessor(
 			select {
 			case <-next:
 				line, err := kclp.ioHandler.readLine()
-				if err != nil {
-					outErr <- err
-				} else {
-					out <- line
+				if err == nil {
+					if line == "" {
+						err = fmt.Errorf("Empty read line recieved")
+					}
+					err = kclp.handleLine(line)
 				}
+				outErr <- err
 			case pair := <-checkpoint:
 				err := kclp.processCheckpoint(pair)
 				checkpointErr <- err
@@ -297,20 +299,7 @@ func (kclp *KCLProcess) startLineProcessor(
 func (kclp *KCLProcess) processNextLine() error {
 	kclp.next <- struct{}{} // We're ready for a new line
 
-	var err error
-	var line string
-
-	select {
-	case err = <-kclp.outErr:
-	case line = <-kclp.out:
-		if line == "" {
-			err = fmt.Errorf("Empty read line recieved")
-		} else {
-			err = kclp.handleLine(line)
-		}
-	}
-
-	return err
+	return <-kclp.outErr
 }
 
 func (kclp *KCLProcess) Run() {
