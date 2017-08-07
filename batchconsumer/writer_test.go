@@ -124,9 +124,8 @@ func (m *mockCheckpointer) wait() error {
 func (m *mockCheckpointer) Shutdown() {
 	m.shutdown <- struct{}{}
 }
-func (m *mockCheckpointer) Checkpoint(pair kcl.SequencePair, retry int) error {
+func (m *mockCheckpointer) Checkpoint(pair kcl.SequencePair) {
 	m.checkpoint <- pair.Sequence.String()
-	return nil
 }
 
 func encode(str string) string {
