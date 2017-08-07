@@ -83,8 +83,14 @@ func FieldsFromKayvee(line string) (map[string]interface{}, error) {
 	possibleJSON := line[firstIdx : lastIdx+1]
 	var fields map[string]interface{}
 	if err := json.Unmarshal([]byte(possibleJSON), &fields); err != nil {
-		return map[string]interface{}{}, err
+		return map[string]interface{}{}, &NonKayveeError{}
 	}
+
+	if len(fields) == 0 { // Some logs superfluous "{}" in them.  They're not kayvee.
+		return map[string]interface{}{}, &NonKayveeError{}
+	}
+	// TODO: consider also filter if they have source and title
+
 	for k, v := range fields {
 		if !stringInSlice(k, reservedFields) {
 			m[k] = v

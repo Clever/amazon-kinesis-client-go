@@ -1,7 +1,6 @@
 package decode
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -75,7 +74,13 @@ func TestKayveeDecoding(t *testing.T) {
 			Title:          "errors on invalid JSON (missing a quote)",
 			Input:          `prefix {"a:"b"} postfix`,
 			ExpectedOutput: map[string]interface{}{},
-			ExpectedError:  &json.SyntaxError{},
+			ExpectedError:  &NonKayveeError{},
+		},
+		Spec{
+			Title:          "errors on empty JSON: {}",
+			Input:          `prefix {} postfix`,
+			ExpectedOutput: map[string]interface{}{},
+			ExpectedError:  &NonKayveeError{},
 		},
 	}
 
