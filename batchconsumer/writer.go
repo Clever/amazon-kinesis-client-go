@@ -9,6 +9,7 @@ import (
 	"golang.org/x/time/rate"
 	kv "gopkg.in/Clever/kayvee-go.v6/logger"
 
+	"github.com/Clever/amazon-kinesis-client-go/batchconsumer/stats"
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 	"github.com/Clever/amazon-kinesis-client-go/splitter"
 )
@@ -95,17 +96,20 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 			if err == ErrMessageIgnored {
 				continue // Skip message
 			} else if err != nil {
+				stats.Counter("unknown-error", 1)
 				b.log.ErrorD("process-message", kv.M{"msg": err.Error(), "rawmsg": string(rawmsg)})
 				continue // Don't stop processing messages because of one bad message
 			}
 
 			if len(tags) == 0 {
+				stats.Counter("no-tags", 1)
 				b.log.ErrorD("no-tags", kv.M{"rawmsg": string(rawmsg)})
 				return fmt.Errorf("No tags provided by consumer for log: %s", string(rawmsg))
 			}
 
 			for _, tag := range tags {
 				if tag == "" {
+					stats.Counter("blank-tag", 1)
 					b.log.ErrorD("blank-tag", kv.M{"rawmsg": string(rawmsg)})
 					return fmt.Errorf("Blank tag provided by consumer for log: %s", string(rawmsg))
 				}
@@ -124,6 +128,8 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 			b.batcherManager.LatestIgnored(pair)
 		}
 		b.batcherManager.LatestProcessed(pair)
+
+		stats.Counter("processed-messages", len(messages))
 	}
 	b.lastProcessedSeq = pair
 

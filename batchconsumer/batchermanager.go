@@ -6,6 +6,7 @@ import (
 
 	kv "gopkg.in/Clever/kayvee-go.v6/logger"
 
+	"github.com/Clever/amazon-kinesis-client-go/batchconsumer/stats"
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
@@ -89,6 +90,7 @@ func (b *batcherManager) sendBatch(batcher *batcher, tag string) {
 		for _, line := range e.FailedMessages {
 			b.log.ErrorD("failed-log", kv.M{"log": line})
 		}
+		stats.Counter("batch-log-failures", len(e.FailedMessages))
 	case CatastrophicSendBatchError:
 		b.log.CriticalD("send-batch", kv.M{"msg": e.Error()})
 		os.Exit(1)
@@ -98,6 +100,7 @@ func (b *batcherManager) sendBatch(batcher *batcher, tag string) {
 	}
 
 	batcher.Clear()
+	stats.Counter("batches-sent", 1)
 }
 
 func (b *batcherManager) sendCheckpoint(
@@ -155,6 +158,7 @@ func (b *batcherManager) startMessageHandler(
 				if !ok {
 					batcher = b.createBatcher()
 					batchers[tmp.tag] = batcher
+					stats.Gauge("tag-count", len(batchers))
 				}
 
 				err := batcher.AddMessage(tmp.msg, tmp.pair)
@@ -168,6 +172,7 @@ func (b *batcherManager) startMessageHandler(
 						"err": err.Error(), "msg": string(tmp.msg), "tag": tmp.tag,
 					})
 				}
+				stats.Counter("msg-batched", 1)
 			case pair := <-lastIgnored:
 				lastIgnoredPair = pair
 

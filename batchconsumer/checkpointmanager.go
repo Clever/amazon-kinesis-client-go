@@ -5,6 +5,7 @@ import (
 
 	kv "gopkg.in/Clever/kayvee-go.v6/logger"
 
+	"github.com/Clever/amazon-kinesis-client-go/batchconsumer/stats"
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
@@ -72,6 +73,7 @@ func (cm *checkpointManager) startCheckpointHandler(
 			if !pair.IsEmpty() {
 				checkpointer.Checkpoint(pair)
 				lastCheckpoint = time.Now()
+				stats.Counter("checkpoints-sent", 1)
 			}
 
 			if isShuttingDown {
