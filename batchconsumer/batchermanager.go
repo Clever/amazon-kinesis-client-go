@@ -28,7 +28,7 @@ type batcherManager struct {
 	batchMsg      chan tagMsgPair
 	lastIgnored   chan kcl.SequencePair
 	lastProcessed chan kcl.SequencePair
-	shutdown      chan struct{}
+	shutdown      chan chan<- struct{}
 }
 
 func NewBatcherManager(
@@ -46,7 +46,7 @@ func NewBatcherManager(
 		batchMsg:      make(chan tagMsgPair),
 		lastIgnored:   make(chan kcl.SequencePair),
 		lastProcessed: make(chan kcl.SequencePair),
-		shutdown:      make(chan struct{}),
+		shutdown:      make(chan chan<- struct{}),
 	}
 
 	bm.startMessageHandler(bm.batchMsg, bm.lastIgnored, bm.lastProcessed, bm.shutdown)
@@ -66,8 +66,11 @@ func (b *batcherManager) LatestProcessed(pair kcl.SequencePair) {
 	b.lastProcessed <- pair
 }
 
-func (b *batcherManager) Shutdown() {
-	b.shutdown <- struct{}{}
+func (b *batcherManager) Shutdown() <-chan struct{} {
+	done := make(chan struct{})
+	b.shutdown <- done
+
+	return done
 }
 
 func (b *batcherManager) createBatcher() *batcher {
@@ -132,7 +135,7 @@ func (b *batcherManager) sendCheckpoint(
 // go routine to avoid racey conditions.
 func (b *batcherManager) startMessageHandler(
 	batchMsg <-chan tagMsgPair, lastIgnored, lastProcessed <-chan kcl.SequencePair,
-	shutdown <-chan struct{},
+	shutdown <-chan chan<- struct{},
 ) {
 	go func() {
 		var lastProcessedPair kcl.SequencePair
@@ -189,12 +192,16 @@ func (b *batcherManager) startMessageHandler(
 				}
 			case pair := <-lastProcessed:
 				lastProcessedPair = pair
-			case <-shutdown:
+			case done := <-shutdown:
 				for tag, batcher := range batchers {
 					b.sendBatch(batcher, tag)
 				}
 				b.chkpntManager.Checkpoint(lastProcessedPair)
-				b.chkpntManager.Shutdown()
+				chkDone := b.chkpntManager.Shutdown()
+				<-chkDone
+
+				done <- struct{}{}
+				return
 			}
 		}
 	}()

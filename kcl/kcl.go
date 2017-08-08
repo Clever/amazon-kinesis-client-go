@@ -13,6 +13,7 @@ import (
 type RecordProcessor interface {
 	Initialize(shardID string, checkpointer Checkpointer) error
 	ProcessRecords(records []Record) error
+	// Shutdown this call should block until it's safe to shutdown the process
 	Shutdown(reason string) error
 }
 
@@ -138,7 +139,6 @@ func New(
 		ioHandler:       i,
 		recordProcessor: recordProcessor,
 
-		isShuttingDown:     false,
 		nextCheckpointPair: SequencePair{},
 	}
 }
@@ -149,7 +149,6 @@ type KCLProcess struct {
 	ioHandler       ioHandler
 	recordProcessor RecordProcessor
 
-	isShuttingDown     bool
 	nextCheckpointPair SequencePair
 }
 
@@ -163,7 +162,8 @@ func (kclp *KCLProcess) Checkpoint(pair SequencePair) {
 }
 
 func (kclp *KCLProcess) Shutdown() {
-	kclp.isShuttingDown = true
+	kclp.ioHandler.writeError("Checkpoint shutdown")
+	kclp.sendCheckpoint(nil, nil) // nil sequence num is signal to shutdown
 }
 
 func (kclp *KCLProcess) handleCheckpointAction(action ActionCheckpoint) error {
@@ -230,6 +230,17 @@ func (kclp *KCLProcess) handleLine(line string) error {
 	switch action := action.(type) {
 	case ActionCheckpoint:
 		err = kclp.handleCheckpointAction(action)
+	case ActionShutdown:
+		kclp.ioHandler.writeError("Received shutdown action...")
+
+		// Shutdown should block until it's save to shutdown the process
+		err = kclp.recordProcessor.Shutdown(action.Reason)
+		if err != nil { // Log error and continue shutting down
+			kclp.ioHandler.writeError(fmt.Sprintf("ERR shutdown: %+#v", err))
+		}
+
+		kclp.ioHandler.writeError("Reporting shutdown done")
+		return kclp.reportDone("shutdown")
 	case ActionInitialize:
 		err = kclp.recordProcessor.Initialize(action.ShardID, kclp)
 		if err == nil {
@@ -237,11 +248,6 @@ func (kclp *KCLProcess) handleLine(line string) error {
 		}
 	case ActionProcessRecords:
 		err = kclp.recordProcessor.ProcessRecords(action.Records)
-		if err == nil {
-			err = kclp.reportDone(action.Action)
-		}
-	case ActionShutdown:
-		err = kclp.recordProcessor.Shutdown(action.Reason)
 		if err == nil {
 			err = kclp.reportDone(action.Action)
 		}
@@ -285,9 +291,5 @@ func (kclp *KCLProcess) Run() {
 			}
 		}
 		kclp.ckpmux.Unlock()
-
-		if kclp.isShuttingDown {
-			kclp.sendCheckpoint(nil, nil) // nil sequence num is signal to shutdown
-		}
 	}
 }

@@ -143,7 +143,8 @@ func (b *batchedWriter) Shutdown(reason string) error {
 		b.log.ErrorD("shutdown-failover", kv.M{"shard-id": b.shardID, "reason": reason})
 	}
 
-	b.batcherManager.Shutdown()
+	done := b.batcherManager.Shutdown()
+	<-done
 
 	return nil
 }

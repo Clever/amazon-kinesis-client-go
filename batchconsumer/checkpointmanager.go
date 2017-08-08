@@ -15,7 +15,7 @@ type checkpointManager struct {
 	checkpointFreq time.Duration
 
 	checkpoint chan kcl.SequencePair
-	shutdown   chan struct{}
+	shutdown   chan chan<- struct{}
 }
 
 func NewCheckpointManager(
@@ -27,7 +27,7 @@ func NewCheckpointManager(
 		checkpointFreq: config.CheckpointFreq,
 
 		checkpoint: make(chan kcl.SequencePair),
-		shutdown:   make(chan struct{}),
+		shutdown:   make(chan chan<- struct{}),
 	}
 
 	cm.startCheckpointHandler(checkpointer, cm.checkpoint, cm.shutdown)
@@ -39,33 +39,35 @@ func (cm *checkpointManager) Checkpoint(pair kcl.SequencePair) {
 	cm.checkpoint <- pair
 }
 
-func (cm *checkpointManager) Shutdown() {
-	cm.shutdown <- struct{}{}
+func (cm *checkpointManager) Shutdown() <-chan struct{} {
+	done := make(chan struct{})
+	cm.shutdown <- done
+
+	return done
 }
 
 func (cm *checkpointManager) startCheckpointHandler(
-	checkpointer kcl.Checkpointer, checkpoint <-chan kcl.SequencePair, shutdown <-chan struct{},
+	checkpointer kcl.Checkpointer, checkpoint <-chan kcl.SequencePair,
+	shutdown <-chan chan<- struct{},
 ) {
 	go func() {
 		lastCheckpoint := time.Now()
 
 		for {
+			var doneShutdown chan<- struct{}
 			pair := kcl.SequencePair{}
-			isShuttingDown := false
 
 			select {
 			case pair = <-checkpoint:
-			case <-shutdown:
-				isShuttingDown = true
+			case doneShutdown = <-shutdown:
 			}
 
 			// This is a write throttle to ensure we don't checkpoint faster than cm.checkpointFreq.
 			// The latest pair number is always used.
-			for !isShuttingDown && time.Now().Sub(lastCheckpoint) < cm.checkpointFreq {
+			for doneShutdown == nil && time.Now().Sub(lastCheckpoint) < cm.checkpointFreq {
 				select {
 				case pair = <-checkpoint: // Keep updating checkpoint pair while waiting
-				case <-shutdown:
-					isShuttingDown = true
+				case doneShutdown = <-shutdown:
 				case <-time.NewTimer(cm.checkpointFreq - time.Now().Sub(lastCheckpoint)).C:
 				}
 			}
@@ -76,8 +78,9 @@ func (cm *checkpointManager) startCheckpointHandler(
 				stats.Counter("checkpoints-sent", 1)
 			}
 
-			if isShuttingDown {
+			if doneShutdown != nil {
 				checkpointer.Shutdown()
+				doneShutdown <- struct{}{}
 				return
 			}
 		}
