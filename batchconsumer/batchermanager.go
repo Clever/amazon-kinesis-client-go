@@ -46,7 +46,8 @@ func newBatcherManager(
 		batchMsg:      make(chan tagMsgPair),
 		lastIgnored:   make(chan kcl.SequencePair),
 		lastProcessed: make(chan kcl.SequencePair),
-		shutdown:      make(chan chan<- struct{}),
+		// shutdown chan takes "done" channel to signal when batchermanager is done shutting down
+		shutdown: make(chan chan<- struct{}),
 	}
 
 	bm.startMessageHandler(bm.batchMsg, bm.lastIgnored, bm.lastProcessed, bm.shutdown)

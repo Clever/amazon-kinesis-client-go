@@ -15,7 +15,8 @@ type checkpointManager struct {
 	checkpointFreq time.Duration
 
 	checkpoint chan kcl.SequencePair
-	shutdown   chan chan<- struct{}
+	// shutdown chan takes "done" channel to signal when checkpointManager is done shutting down
+	shutdown chan chan<- struct{}
 }
 
 func newCheckpointManager(
