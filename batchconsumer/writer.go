@@ -65,7 +65,7 @@ func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error)
 	}
 
 	// Process a batch of messages from a CWLogs Subscription
-	return splitter.GetMessagesFromGzippedInput(record, b.config.DeployEnv == "production")
+	return splitter.GetMessagesFromGzippedInput(record)
 }
 
 func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {

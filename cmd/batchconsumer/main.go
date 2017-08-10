@@ -29,7 +29,6 @@ func main() {
 		BatchCount:    500,
 		BatchSize:     4 * 1024 * 1024, // 4Mb
 		LogFile:       "/tmp/example-kcl-consumer",
-		DeployEnv:     "test-env",
 	}
 
 	output, file := createDummyOutput()
