@@ -43,7 +43,7 @@ func NewBatchedWriter(config Config, sender Sender, log kv.KayveeLogger) *batche
 func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer) error {
 	b.shardID = shardID
 
-	b.chkpntManager = newCheckpointManager(checkpointer, b.config, b.log)
+	b.chkpntManager = newCheckpointManager(checkpointer, b.config.CheckpointFreq, b.log)
 	b.batcherManager = newBatcherManager(b.sender, b.chkpntManager, b.config, b.log)
 
 	return nil

@@ -20,12 +20,12 @@ type checkpointManager struct {
 }
 
 func newCheckpointManager(
-	checkpointer kcl.Checkpointer, config Config, log kv.KayveeLogger,
+	checkpointer kcl.Checkpointer, checkpointFreq time.Duration, log kv.KayveeLogger,
 ) *checkpointManager {
 	cm := &checkpointManager{
 		log: log,
 
-		checkpointFreq: config.CheckpointFreq,
+		checkpointFreq: checkpointFreq,
 
 		checkpoint: make(chan kcl.SequencePair),
 		shutdown:   make(chan chan<- struct{}),
