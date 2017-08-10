@@ -1,13 +1,13 @@
 package batchconsumer
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
-var ErrBatchFull = fmt.Errorf("The batch is full")
+var ErrBatchFull = errors.New("The batch is full")
 
 type batcher struct {
 	flushCount int
