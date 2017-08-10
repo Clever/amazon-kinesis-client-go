@@ -34,12 +34,12 @@ func IsGzipped(b []byte) bool {
 
 // GetMessagesFromGzippedInput takes a gzipped record from a CWLogs Subscription and splits it into
 // a slice of messages.
-func GetMessagesFromGzippedInput(input []byte, prodEnv bool) ([][]byte, error) {
+func GetMessagesFromGzippedInput(input []byte) ([][]byte, error) {
 	unpacked, err := unpack(input)
 	if err != nil {
 		return [][]byte{}, err
 	}
-	return Split(unpacked, prodEnv), nil
+	return Split(unpacked), nil
 }
 
 // Unpack expects a gzipped + json-stringified LogEventBatch
@@ -74,7 +74,7 @@ var taskRegex = regexp.MustCompile(taskMeta)
 // Split takes a LogEventBatch and separates into a slice of enriched log lines
 // Lines are enhanced by adding an Rsyslog prefix, which should be handled correctly by
 // the subsequent decoding logic.
-func Split(b LogEventBatch, prodEnv bool) [][]byte {
+func Split(b LogEventBatch) [][]byte {
 	env := "unknown"
 	app := "unknown"
 	task := "00001111-2222-3333-4444-555566667777"
@@ -83,12 +83,6 @@ func Split(b LogEventBatch, prodEnv bool) [][]byte {
 		env = matches[0][1]
 		app = matches[0][2]
 		task = matches[0][3]
-	}
-
-	if (env == "production") != prodEnv {
-		// if there's a mis-match between the consumer's environment and the log's environment,
-		// throw away the log. (this is a workaround for coarse grained subscription filters.)
-		return [][]byte{}
 	}
 
 	rsyslogPrefix := `%s %s %s[%d]: %s`

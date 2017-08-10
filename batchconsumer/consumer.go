@@ -13,9 +13,6 @@ import (
 
 // Config used for BatchConsumer constructor.  Any empty fields are populated with defaults.
 type Config struct {
-	// DeployEnv the name of the deployment environment
-	DeployEnv string
-
 	// LogFile where consumer errors and failed log lines are saved
 	LogFile string
 
@@ -54,10 +51,6 @@ func withDefaults(config Config) Config {
 	}
 	if config.BatchSize == 0 {
 		config.BatchSize = 4 * 1024 * 1024
-	}
-
-	if config.DeployEnv == "" {
-		config.DeployEnv = "unknown-env"
 	}
 
 	// Not totally clear we need this rate limit.  The KCL may do rate limiting for us.
