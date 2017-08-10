@@ -233,7 +233,7 @@ func (kclp *KCLProcess) handleLine(line string) error {
 	case ActionShutdown:
 		kclp.ioHandler.writeError("Received shutdown action...")
 
-		// Shutdown should block until it's save to shutdown the process
+		// Shutdown should block until it's safe to shutdown the process
 		err = kclp.recordProcessor.Shutdown(action.Reason)
 		if err != nil { // Log error and continue shutting down
 			kclp.ioHandler.writeError(fmt.Sprintf("ERR shutdown: %+#v", err))
