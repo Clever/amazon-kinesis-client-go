@@ -31,7 +31,7 @@ type batcherManager struct {
 	shutdown      chan chan<- struct{}
 }
 
-func NewBatcherManager(
+func newBatcherManager(
 	sender Sender, chkpntManager *checkpointManager, config Config, log kv.KayveeLogger,
 ) *batcherManager {
 	bm := &batcherManager{

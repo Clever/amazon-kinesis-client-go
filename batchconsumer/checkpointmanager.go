@@ -18,7 +18,7 @@ type checkpointManager struct {
 	shutdown   chan chan<- struct{}
 }
 
-func NewCheckpointManager(
+func newCheckpointManager(
 	checkpointer kcl.Checkpointer, config Config, log kv.KayveeLogger,
 ) *checkpointManager {
 	cm := &checkpointManager{
