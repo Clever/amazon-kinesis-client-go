@@ -16,6 +16,12 @@ type tagMsgPair struct {
 	pair kcl.SequencePair
 }
 
+type batcherManagerConfig struct {
+	BatchCount    int
+	BatchSize     int
+	BatchInterval time.Duration
+}
+
 type batcherManager struct {
 	log           kv.KayveeLogger
 	sender        Sender
@@ -32,16 +38,16 @@ type batcherManager struct {
 }
 
 func newBatcherManager(
-	sender Sender, chkpntManager *checkpointManager, config Config, log kv.KayveeLogger,
+	sender Sender, chkpntManager *checkpointManager, cfg batcherManagerConfig, log kv.KayveeLogger,
 ) *batcherManager {
 	bm := &batcherManager{
 		log:           log,
 		sender:        sender,
 		chkpntManager: chkpntManager,
 
-		batchCount:    config.BatchCount,
-		batchSize:     config.BatchSize,
-		batchInterval: config.BatchInterval,
+		batchCount:    cfg.BatchCount,
+		batchSize:     cfg.BatchSize,
+		batchInterval: cfg.BatchInterval,
 
 		batchMsg:      make(chan tagMsgPair),
 		lastIgnored:   make(chan kcl.SequencePair),
