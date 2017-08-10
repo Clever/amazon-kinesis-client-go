@@ -73,7 +73,7 @@ func (cm *checkpointManager) startCheckpointHandler(
 				}
 			}
 
-			if !pair.IsEmpty() {
+			if !pair.IsNil() {
 				checkpointer.Checkpoint(pair)
 				lastCheckpoint = time.Now()
 				stats.Counter("checkpoints-sent", 1)

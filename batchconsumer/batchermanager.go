@@ -128,12 +128,12 @@ func (b *batcherManager) sendCheckpoint(
 		}
 
 		// Check for empty because it's possible that no messages have been ignored
-		if smallest.IsEmpty() || batcher.SmallestSeq.IsLessThan(smallest) {
+		if smallest.IsNil() || batcher.SmallestSeq.IsLessThan(smallest) {
 			smallest = batcher.SmallestSeq
 		}
 	}
 
-	if !smallest.IsEmpty() {
+	if !smallest.IsNil() {
 		b.chkpntManager.Checkpoint(smallest)
 	}
 }

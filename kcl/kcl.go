@@ -156,7 +156,7 @@ func (kclp *KCLProcess) Checkpoint(pair SequencePair) {
 	kclp.ckpmux.Lock()
 	defer kclp.ckpmux.Unlock()
 
-	if kclp.nextCheckpointPair.IsEmpty() || kclp.nextCheckpointPair.IsLessThan(pair) {
+	if kclp.nextCheckpointPair.IsNil() || kclp.nextCheckpointPair.IsLessThan(pair) {
 		kclp.nextCheckpointPair = pair
 	}
 }
@@ -189,7 +189,7 @@ func (kclp *KCLProcess) handleCheckpointAction(action ActionCheckpoint) error {
 	subSeq := action.SubSequenceNumber
 
 	kclp.ckpmux.Lock()
-	if !kclp.nextCheckpointPair.IsEmpty() {
+	if !kclp.nextCheckpointPair.IsNil() {
 		tmp := kclp.nextCheckpointPair.Sequence.String()
 		seq = &tmp
 		subSeq = &kclp.nextCheckpointPair.SubSequence
@@ -279,7 +279,7 @@ func (kclp *KCLProcess) Run() {
 		}
 
 		kclp.ckpmux.Lock()
-		if !kclp.nextCheckpointPair.IsEmpty() {
+		if !kclp.nextCheckpointPair.IsNil() {
 			seq := kclp.nextCheckpointPair.Sequence.String()
 			subSeq := kclp.nextCheckpointPair.SubSequence
 

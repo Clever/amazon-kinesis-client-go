@@ -38,7 +38,7 @@ func (b *batcher) AddMessage(msg []byte, pair kcl.SequencePair) error {
 	}
 
 	b.Batch = append(b.Batch, msg)
-	if b.SmallestSeq.IsEmpty() || pair.IsLessThan(b.SmallestSeq) {
+	if b.SmallestSeq.IsNil() || pair.IsLessThan(b.SmallestSeq) {
 		b.SmallestSeq = pair
 	}
 	b.LastUpdated = time.Now()

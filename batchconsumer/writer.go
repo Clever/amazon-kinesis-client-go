@@ -82,7 +82,7 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 		}
 
 		pair = kcl.SequencePair{seq, record.SubSequenceNumber}
-		if prevPair.IsEmpty() { // Handles on-start edge case where b.lastProcessSeq is empty
+		if prevPair.IsNil() { // Handles on-start edge case where b.lastProcessSeq is empty
 			prevPair = pair
 		}
 

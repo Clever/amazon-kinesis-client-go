@@ -10,12 +10,12 @@ type SequencePair struct {
 	SubSequence int
 }
 
-func (s SequencePair) IsEmpty() bool {
+func (s SequencePair) IsNil() bool {
 	return s.Sequence == nil
 }
 
 func (s SequencePair) IsLessThan(pair SequencePair) bool {
-	if s.IsEmpty() || pair.IsEmpty() { // empty pairs are incomparable
+	if s.IsNil() || pair.IsNil() { // empty pairs are incomparable
 		return false
 	}
 
