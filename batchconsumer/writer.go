@@ -81,7 +81,7 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 			return fmt.Errorf("could not parse sequence number '%s'", record.SequenceNumber)
 		}
 
-		pair = kcl.SequencePair{seq, record.SubSequenceNumber}
+		pair = kcl.SequencePair{Sequence: seq, SubSequence: record.SubSequenceNumber}
 		if prevPair.IsNil() { // Handles on-start edge case where b.lastProcessSeq is empty
 			prevPair = pair
 		}

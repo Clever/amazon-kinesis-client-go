@@ -39,7 +39,7 @@ func (srp *sampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 			fmt.Fprintf(os.Stderr, "could not parse sequence number '%s'\n", record.SequenceNumber)
 			continue
 		}
-		pair := kcl.SequencePair{seqNumber, record.SubSequenceNumber}
+		pair := kcl.SequencePair{Sequence: seqNumber, SubSequence: record.SubSequenceNumber}
 		if srp.shouldUpdateSequence(pair) {
 			srp.largestPair = pair
 		}
