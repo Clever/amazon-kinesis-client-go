@@ -118,65 +118,10 @@ func TestSplit(t *testing.T) {
 			},
 		},
 	}
-	prodEnv := false
-	lines := Split(input, prodEnv)
+	lines := Split(input)
 	expected := [][]byte{
 		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: some log line"),
 		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: another log line"),
 	}
-	assert.Equal(t, expected, lines)
-}
-
-func TestSplitFiltersByEnv(t *testing.T) {
-	t.Log("If Split is run with prodEnv == true, it should omit logs with env != production")
-	input := LogEventBatch{
-		MessageType: "DATA_MESSAGE",
-		Owner:       "123456789012",
-		LogGroup:    "/aws/batch/job",
-		LogStream:   "env--app/12345678-1234-1234-1234-555566667777/88889999-0000-aaaa-bbbb-ccccddddeeee",
-		// LogStream:           "environment--app",
-		SubscriptionFilters: []string{"MySubscriptionFilter"},
-		LogEvents: []LogEvent{
-			{
-				ID:        "99999992379011144044923130086453437181614530551221780480",
-				Timestamp: 1498519943285,
-				Message:   "some log line",
-			},
-			{
-				ID:        "99999992387663833181953011865369295871402094815542181889",
-				Timestamp: 1498519943285,
-				Message:   "another log line",
-			},
-		},
-	}
-	prodEnv := true
-	lines := Split(input, prodEnv)
-	expected := [][]byte{}
-	assert.Equal(t, expected, lines)
-
-	t.Log("If Split is run with prodEnv == false, it should omit logs with env == production")
-	input = LogEventBatch{
-		MessageType: "DATA_MESSAGE",
-		Owner:       "123456789012",
-		LogGroup:    "/aws/batch/job",
-		LogStream:   "production--app/12345678-1234-1234-1234-555566667777/88889999-0000-aaaa-bbbb-ccccddddeeee",
-		// LogStream:           "environment--app",
-		SubscriptionFilters: []string{"MySubscriptionFilter"},
-		LogEvents: []LogEvent{
-			{
-				ID:        "99999992379011144044923130086453437181614530551221780480",
-				Timestamp: 1498519943285,
-				Message:   "some log line",
-			},
-			{
-				ID:        "99999992387663833181953011865369295871402094815542181889",
-				Timestamp: 1498519943285,
-				Message:   "another log line",
-			},
-		},
-	}
-	prodEnv = false
-	lines = Split(input, prodEnv)
-	expected = [][]byte{}
 	assert.Equal(t, expected, lines)
 }
