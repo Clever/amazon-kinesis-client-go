@@ -18,6 +18,7 @@ type Config struct {
 
 	// LogFile where consumer errors and failed log lines are saved
 	LogFile string
+
 	// BatchInterval the upper bound on how often SendBatch is called with accumulated messages
 	BatchInterval time.Duration
 	// BatchCount is the number of messages that triggers a SendBatch call
@@ -32,10 +33,6 @@ type Config struct {
 
 	// CheckpointFreq the frequency in which a checkpoint is saved
 	CheckpointFreq time.Duration
-	// CheckpointRetries the number of times the consumer will try to save a checkpoint
-	CheckpointRetries int
-	// CheckpointRetrySleep the amount of time between checkpoint save attempts
-	CheckpointRetrySleep time.Duration
 }
 
 // BatchConsumer is responsible for marshalling
@@ -63,8 +60,9 @@ func withDefaults(config Config) Config {
 		config.DeployEnv = "unknown-env"
 	}
 
+	// Not totally clear we need this rate limit.  The KCL may do rate limiting for us.
 	if config.ReadRateLimit == 0 {
-		config.ReadRateLimit = 300
+		config.ReadRateLimit = 1000
 	}
 	if config.ReadBurstLimit == 0 {
 		config.ReadBurstLimit = int(float64(config.ReadRateLimit)*1.2 + 0.5)
@@ -72,12 +70,6 @@ func withDefaults(config Config) Config {
 
 	if config.CheckpointFreq == 0 {
 		config.CheckpointFreq = 60 * time.Second
-	}
-	if config.CheckpointRetries == 0 {
-		config.CheckpointRetries = 5
-	}
-	if config.CheckpointRetrySleep == 0 {
-		config.CheckpointRetrySleep = 5 * time.Second
 	}
 
 	return config

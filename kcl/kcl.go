@@ -2,7 +2,6 @@ package kcl
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,108 +13,13 @@ import (
 type RecordProcessor interface {
 	Initialize(shardID string, checkpointer Checkpointer) error
 	ProcessRecords(records []Record) error
+	// Shutdown this call should block until it's safe to shutdown the process
 	Shutdown(reason string) error
 }
 
 type Checkpointer interface {
-	Checkpoint(sequenceNumber *string, subSequenceNumber *int) error
-	CheckpointWithRetry(sequenceNumber *string, subSequenceNumber *int, retryCount int) error
+	Checkpoint(pair SequencePair)
 	Shutdown()
-}
-
-type CheckpointError struct {
-	e string
-}
-
-func (ce CheckpointError) Error() string {
-	return ce.e
-}
-
-type checkpointer struct {
-	mux sync.Mutex
-
-	ioHandler ioHandler
-}
-
-func (c *checkpointer) getAction() (interface{}, error) {
-	line, err := c.ioHandler.readLine()
-	if err != nil {
-		return nil, err
-	}
-	action, err := c.ioHandler.loadAction(line.String())
-	if err != nil {
-		return nil, err
-	}
-	return action, nil
-}
-
-func (c *checkpointer) Checkpoint(sequenceNumber *string, subSequenceNumber *int) error {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	c.ioHandler.writeAction(ActionCheckpoint{
-		Action:            "checkpoint",
-		SequenceNumber:    sequenceNumber,
-		SubSequenceNumber: subSequenceNumber,
-	})
-	line, err := c.ioHandler.readLine()
-	if err != nil {
-		return err
-	}
-	actionI, err := c.ioHandler.loadAction(line.String())
-	if err != nil {
-		return err
-	}
-	action, ok := actionI.(ActionCheckpoint)
-	if !ok {
-		return fmt.Errorf("expected checkpoint response, got '%s'", line.String())
-	}
-	if action.Error != nil && *action.Error != "" {
-		return CheckpointError{
-			e: *action.Error,
-		}
-	}
-	return nil
-}
-
-// CheckpointWithRetry tries to save a checkPoint up to `retryCount` + 1 times.
-// `retryCount` should be >= 0
-func (c *checkpointer) CheckpointWithRetry(
-	sequenceNumber *string, subSequenceNumber *int, retryCount int,
-) error {
-	sleepDuration := 5 * time.Second
-
-	for n := 0; n <= retryCount; n++ {
-		err := c.Checkpoint(sequenceNumber, subSequenceNumber)
-		if err == nil {
-			return nil
-		}
-
-		if cperr, ok := err.(CheckpointError); ok {
-			switch cperr.Error() {
-			case "ShutdownException":
-				return fmt.Errorf("Encountered shutdown exception, skipping checkpoint")
-			case "ThrottlingException":
-				fmt.Fprintf(os.Stderr, "Was throttled while checkpointing, will attempt again in %s\n", sleepDuration)
-			case "InvalidStateException":
-				fmt.Fprintf(os.Stderr, "MultiLangDaemon reported an invalid state while checkpointing\n")
-			default:
-				fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", err)
-			}
-		}
-
-		if n == retryCount {
-			return fmt.Errorf("Failed to checkpoint after %d attempts, giving up.", retryCount)
-		}
-
-		time.Sleep(sleepDuration)
-	}
-
-	return nil
-}
-
-func (c *checkpointer) Shutdown() {
-	c.CheckpointWithRetry(nil, nil, 5)
 }
 
 type ioHandler struct {
@@ -123,8 +27,6 @@ type ioHandler struct {
 	outputFile io.Writer
 	errorFile  io.Writer
 }
-
-//func newIOHandler(inputFile io.Reader, outputFile io.Writer, errorFile io.)
 
 func (i ioHandler) writeLine(line string) {
 	fmt.Fprintf(i.outputFile, "\n%s\n", line)
@@ -134,13 +36,13 @@ func (i ioHandler) writeError(message string) {
 	fmt.Fprintf(i.errorFile, "%s\n", message)
 }
 
-func (i ioHandler) readLine() (*bytes.Buffer, error) {
+func (i ioHandler) readLine() (string, error) {
 	bio := bufio.NewReader(i.inputFile)
 	line, err := bio.ReadString('\n')
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return bytes.NewBufferString(line), nil
+	return line, nil
 }
 
 type ActionInitialize struct {
@@ -197,6 +99,8 @@ func (i ioHandler) loadAction(line string) (interface{}, error) {
 			return nil, err
 		}
 		return actionProcessRecords, nil
+	case "shutdownRequested":
+		fallthrough
 	case "shutdown":
 		var actionShutdown ActionShutdown
 		if err := json.Unmarshal(lineBytes, &actionShutdown); err != nil {
@@ -223,25 +127,88 @@ func (i ioHandler) writeAction(action interface{}) error {
 	return nil
 }
 
-func New(inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor RecordProcessor) *KCLProcess {
+func New(
+	inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor RecordProcessor,
+) *KCLProcess {
 	i := ioHandler{
 		inputFile:  inputFile,
 		outputFile: outputFile,
 		errorFile:  errorFile,
 	}
 	return &KCLProcess{
-		ioHandler: i,
-		checkpointer: &checkpointer{
-			ioHandler: i,
-		},
+		ioHandler:       i,
 		recordProcessor: recordProcessor,
+
+		nextCheckpointPair: SequencePair{},
 	}
 }
 
 type KCLProcess struct {
+	ckpmux sync.Mutex
+
 	ioHandler       ioHandler
-	checkpointer    Checkpointer
 	recordProcessor RecordProcessor
+
+	nextCheckpointPair SequencePair
+}
+
+func (kclp *KCLProcess) Checkpoint(pair SequencePair) {
+	kclp.ckpmux.Lock()
+	defer kclp.ckpmux.Unlock()
+
+	if kclp.nextCheckpointPair.IsNil() || kclp.nextCheckpointPair.IsLessThan(pair) {
+		kclp.nextCheckpointPair = pair
+	}
+}
+
+func (kclp *KCLProcess) Shutdown() {
+	kclp.ioHandler.writeError("Checkpoint shutdown")
+	kclp.sendCheckpoint(nil, nil) // nil sequence num is signal to shutdown
+}
+
+func (kclp *KCLProcess) handleCheckpointAction(action ActionCheckpoint) error {
+	if action.Error == nil { // Successful checkpoint
+		return nil
+	}
+
+	msg := *action.Error
+	switch msg {
+	case "ShutdownException":
+		return fmt.Errorf("Encountered shutdown exception, skipping checkpoint")
+	case "ThrottlingException":
+		sleep := 5 * time.Second
+		fmt.Fprintf(os.Stderr, "Checkpointing throttling, pause for %s", sleep)
+		time.Sleep(sleep)
+	case "InvalidStateException":
+		fmt.Fprintf(os.Stderr, "MultiLangDaemon invalid state while checkpointing")
+	default:
+		fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", msg)
+	}
+
+	seq := action.SequenceNumber
+	subSeq := action.SubSequenceNumber
+
+	kclp.ckpmux.Lock()
+	if !kclp.nextCheckpointPair.IsNil() {
+		tmp := kclp.nextCheckpointPair.Sequence.String()
+		seq = &tmp
+		subSeq = &kclp.nextCheckpointPair.SubSequence
+	}
+	kclp.ckpmux.Unlock()
+
+	if seq != nil && subSeq != nil {
+		return kclp.sendCheckpoint(seq, subSeq)
+	}
+
+	return nil
+}
+
+func (kclp *KCLProcess) sendCheckpoint(seq *string, subSeq *int) error {
+	return kclp.ioHandler.writeAction(ActionCheckpoint{
+		Action:            "checkpoint",
+		SequenceNumber:    seq,
+		SubSequenceNumber: subSeq,
+	})
 }
 
 func (kclp *KCLProcess) reportDone(responseFor string) error {
@@ -254,47 +221,75 @@ func (kclp *KCLProcess) reportDone(responseFor string) error {
 	})
 }
 
-func (kclp *KCLProcess) performAction(a interface{}) (string, error) {
-	switch action := a.(type) {
-	case ActionInitialize:
-		return action.Action, kclp.recordProcessor.Initialize(action.ShardID, kclp.checkpointer)
-	case ActionProcessRecords:
-		return action.Action, kclp.recordProcessor.ProcessRecords(action.Records)
-	case ActionShutdown:
-		return action.Action, kclp.recordProcessor.Shutdown(action.Reason)
-	default:
-		return "", fmt.Errorf("unknown action to dispatch: %s", action)
-	}
-}
-
 func (kclp *KCLProcess) handleLine(line string) error {
 	action, err := kclp.ioHandler.loadAction(line)
 	if err != nil {
 		return err
 	}
 
-	responseFor, err := kclp.performAction(action)
-	if err != nil {
-		return err
+	switch action := action.(type) {
+	case ActionCheckpoint:
+		err = kclp.handleCheckpointAction(action)
+	case ActionShutdown:
+		kclp.ioHandler.writeError("Received shutdown action...")
+
+		// Shutdown should block until it's safe to shutdown the process
+		err = kclp.recordProcessor.Shutdown(action.Reason)
+		if err != nil { // Log error and continue shutting down
+			kclp.ioHandler.writeError(fmt.Sprintf("ERR shutdown: %+#v", err))
+		}
+
+		kclp.ioHandler.writeError("Reporting shutdown done")
+		return kclp.reportDone("shutdown")
+	case ActionInitialize:
+		err = kclp.recordProcessor.Initialize(action.ShardID, kclp)
+		if err == nil {
+			err = kclp.reportDone(action.Action)
+		}
+	case ActionProcessRecords:
+		err = kclp.recordProcessor.ProcessRecords(action.Records)
+		if err == nil {
+			err = kclp.reportDone(action.Action)
+		}
+	default:
+		err = fmt.Errorf("unknown action to dispatch: %+#v", action)
 	}
-	return kclp.reportDone(responseFor)
+
+	return err
 }
 
 func (kclp *KCLProcess) Run() {
 	for {
 		line, err := kclp.ioHandler.readLine()
-		if err != nil {
-			kclp.ioHandler.writeError("Read line error: " + err.Error())
+		if err == io.EOF {
+			kclp.ioHandler.writeError("IO stream closed")
 			return
-		} else if line == nil {
+		} else if err != nil {
+			kclp.ioHandler.writeError(fmt.Sprintf("ERR Read line: %+#v", err))
+			return
+		} else if line == "" {
 			kclp.ioHandler.writeError("Empty read line recieved")
+			continue
+		}
+
+		err = kclp.handleLine(line)
+		if err != nil {
+			kclp.ioHandler.writeError(fmt.Sprintf("ERR Handle line: %+#v", err))
 			return
 		}
 
-		err = kclp.handleLine(line.String())
-		if err != nil {
-			kclp.ioHandler.writeError("Handle line error: " + err.Error())
-			return
+		kclp.ckpmux.Lock()
+		if !kclp.nextCheckpointPair.IsNil() {
+			seq := kclp.nextCheckpointPair.Sequence.String()
+			subSeq := kclp.nextCheckpointPair.SubSequence
+
+			err := kclp.sendCheckpoint(&seq, &subSeq)
+			if err != nil {
+				kclp.ioHandler.writeError(fmt.Sprintf("ERR checkpoint: %+#v", err))
+			} else {
+				kclp.nextCheckpointPair = SequencePair{}
+			}
 		}
+		kclp.ckpmux.Unlock()
 	}
 }

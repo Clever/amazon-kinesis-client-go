@@ -10,18 +10,15 @@ import (
 )
 
 type sampleRecordProcessor struct {
-	checkpointer      kcl.Checkpointer
-	checkpointRetries int
-	checkpointFreq    time.Duration
-	largestSeq        *big.Int
-	largestSubSeq     int
-	lastCheckpoint    time.Time
+	checkpointer   kcl.Checkpointer
+	checkpointFreq time.Duration
+	largestPair    kcl.SequencePair
+	lastCheckpoint time.Time
 }
 
 func newSampleRecordProcessor() *sampleRecordProcessor {
 	return &sampleRecordProcessor{
-		checkpointRetries: 5,
-		checkpointFreq:    60 * time.Second,
+		checkpointFreq: 60 * time.Second,
 	}
 }
 
@@ -31,9 +28,8 @@ func (srp *sampleRecordProcessor) Initialize(shardID string, checkpointer kcl.Ch
 	return nil
 }
 
-func (srp *sampleRecordProcessor) shouldUpdateSequence(sequenceNumber *big.Int, subSequenceNumber int) bool {
-	return srp.largestSeq == nil || sequenceNumber.Cmp(srp.largestSeq) == 1 ||
-		(sequenceNumber.Cmp(srp.largestSeq) == 0 && subSequenceNumber > srp.largestSubSeq)
+func (srp *sampleRecordProcessor) shouldUpdateSequence(pair kcl.SequencePair) bool {
+	return srp.largestPair.IsLessThan(pair)
 }
 
 func (srp *sampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
@@ -43,14 +39,13 @@ func (srp *sampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 			fmt.Fprintf(os.Stderr, "could not parse sequence number '%s'\n", record.SequenceNumber)
 			continue
 		}
-		if srp.shouldUpdateSequence(seqNumber, record.SubSequenceNumber) {
-			srp.largestSeq = seqNumber
-			srp.largestSubSeq = record.SubSequenceNumber
+		pair := kcl.SequencePair{seqNumber, record.SubSequenceNumber}
+		if srp.shouldUpdateSequence(pair) {
+			srp.largestPair = pair
 		}
 	}
 	if time.Now().Sub(srp.lastCheckpoint) > srp.checkpointFreq {
-		largestSeq := srp.largestSeq.String()
-		srp.checkpointer.CheckpointWithRetry(&largestSeq, &srp.largestSubSeq, srp.checkpointRetries)
+		srp.checkpointer.Checkpoint(srp.largestPair)
 		srp.lastCheckpoint = time.Now()
 	}
 	return nil
