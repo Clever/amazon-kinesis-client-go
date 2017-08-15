@@ -154,9 +154,18 @@ func getStringArray(json map[string]interface{}, key string) []string {
 		return []string{}
 	}
 
-	strArray, ok := val.([]string)
+	iArray, ok := val.([]interface{})
 	if !ok {
 		return []string{}
+	}
+
+	strArray := []string{}
+	for _, item := range iArray {
+		s, ok := item.(string)
+		if !ok {
+			return []string{}
+		}
+		strArray = append(strArray, s)
 	}
 
 	return strArray
