@@ -203,6 +203,12 @@ type ParseAndEnhanceSpec struct {
 }
 
 func TestParseAndEnhance(t *testing.T) {
+	logTime2, err := time.Parse(time.RFC3339, "2017-04-05T21:57:46+00:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	logTime2 = logTime2.UTC()
+
 	// timestamp in Rsyslog_FileFormat
 	logTime3, err := time.Parse(RFC3339Micro, "2017-04-05T21:57:46.794862+00:00")
 	if err != nil {
@@ -416,6 +422,22 @@ func TestParseAndEnhance(t *testing.T) {
 				"kv__source":     "a",
 			},
 			ExpectedError: nil,
+		},
+		ParseAndEnhanceSpec{
+			Title: "Log with timestamp time.RFC3339 format",
+			Input: ParseAndEnhanceInput{
+				Line: `2017-04-05T21:57:46+00:00 mongo-docker-pipeline-r10-4 diamond[24099] ` +
+					`Signal Received: 15`,
+				RenameESReservedFields: true,
+				MinimumTimestamp:       time.Now().Add(-100 * time.Hour * 24 * 365), // year 2117
+			},
+			ExpectedOutput: map[string]interface{}{
+				"env":         "deploy-env",
+				"hostname":    "mongo-docker-pipeline-r10-4",
+				"programname": "diamond",
+				"rawlog":      "Signal Received: 15",
+				"timestamp":   logTime2,
+			},
 		},
 	}
 	for _, spec := range specs {
