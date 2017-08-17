@@ -15,7 +15,7 @@ import (
 var reservedFields = []string{
 	"prefix",
 	"postfix",
-	"Type",
+	"decoder_msg_type",
 }
 
 func stringInSlice(s string, slice []string) bool {
@@ -97,7 +97,7 @@ func FieldsFromKayvee(line string) (map[string]interface{}, error) {
 		}
 	}
 
-	m["type"] = "Kayvee"
+	m["decoder_msg_type"] = "Kayvee"
 
 	return m, nil
 }
