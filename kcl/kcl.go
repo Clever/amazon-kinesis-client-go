@@ -140,6 +140,7 @@ func New(
 		recordProcessor: recordProcessor,
 
 		nextCheckpointPair: SequencePair{},
+		wasAskedToShutdown: false,
 	}
 }
 
@@ -150,6 +151,7 @@ type KCLProcess struct {
 	recordProcessor RecordProcessor
 
 	nextCheckpointPair SequencePair
+	wasAskedToShutdown bool
 }
 
 func (kclp *KCLProcess) Checkpoint(pair SequencePair) {
@@ -163,7 +165,7 @@ func (kclp *KCLProcess) Checkpoint(pair SequencePair) {
 
 func (kclp *KCLProcess) Shutdown() {
 	kclp.ioHandler.writeError("Checkpoint shutdown")
-	kclp.sendCheckpoint(nil, nil) // nil sequence num is signal to shutdown
+	kclp.wasAskedToShutdown = true
 }
 
 func (kclp *KCLProcess) handleCheckpointAction(action ActionCheckpoint) error {
@@ -275,7 +277,6 @@ func (kclp *KCLProcess) Run() {
 		err = kclp.handleLine(line)
 		if err != nil {
 			kclp.ioHandler.writeError(fmt.Sprintf("ERR Handle line: %+#v", err))
-			return
 		}
 
 		kclp.ckpmux.Lock()
@@ -288,6 +289,11 @@ func (kclp *KCLProcess) Run() {
 				kclp.ioHandler.writeError(fmt.Sprintf("ERR checkpoint: %+#v", err))
 			} else {
 				kclp.nextCheckpointPair = SequencePair{}
+			}
+		} else if kclp.wasAskedToShutdown {
+			err := kclp.sendCheckpoint(nil, nil) // nil sequence num is signal to shutdown
+			if err != nil {
+				kclp.ioHandler.writeError(fmt.Sprintf("ERR shutdown ask: %+#v", err))
 			}
 		}
 		kclp.ckpmux.Unlock()
