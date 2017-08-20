@@ -114,7 +114,7 @@ func (b *batcherManager) sendBatch(batcher *batcher, tag string) {
 }
 
 func (b *batcherManager) sendCheckpoint(
-	tag string, lastIgnoredPair kcl.SequencePair, batchers map[string]*batcher,
+	tag string, lastIgnoredPair, lastProcessedPair kcl.SequencePair, batchers map[string]*batcher,
 ) {
 	smallest := lastIgnoredPair
 
@@ -133,9 +133,10 @@ func (b *batcherManager) sendCheckpoint(
 		}
 	}
 
-	if !smallest.IsNil() {
-		b.chkpntManager.Checkpoint(smallest)
+	if smallest.IsNil() { // This can occur when all messages in a stream go into one batch
+		smallest = lastProcessedPair
 	}
+	b.chkpntManager.Checkpoint(smallest)
 }
 
 // startMessageDistributer starts a go-routine that routes messages to batches.  It's in uses a
@@ -164,7 +165,7 @@ func (b *batcherManager) startMessageHandler(
 				for tag, batcher := range batchers {
 					if b.batchInterval <= time.Now().Sub(batcher.LastUpdated) {
 						b.sendBatch(batcher, tag)
-						b.sendCheckpoint(tag, lastIgnoredPair, batchers)
+						b.sendCheckpoint(tag, lastIgnoredPair, lastProcessedPair, batchers)
 						batcher.Clear()
 					}
 				}
@@ -179,7 +180,7 @@ func (b *batcherManager) startMessageHandler(
 				err := batcher.AddMessage(tmp.msg, tmp.pair)
 				if err == ErrBatchFull {
 					b.sendBatch(batcher, tmp.tag)
-					b.sendCheckpoint(tmp.tag, lastIgnoredPair, batchers)
+					b.sendCheckpoint(tmp.tag, lastIgnoredPair, lastProcessedPair, batchers)
 
 					batcher.AddMessage(tmp.msg, tmp.pair)
 				} else if err != nil {
