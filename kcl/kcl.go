@@ -23,9 +23,17 @@ type Checkpointer interface {
 }
 
 type ioHandler struct {
-	inputFile  io.Reader
+	input      *bufio.Reader
 	outputFile io.Writer
 	errorFile  io.Writer
+}
+
+func newIOHandler(inputFile io.Reader, outputFile, errorFile io.Writer) ioHandler {
+	return ioHandler{
+		input:      bufio.NewReader(inputFile),
+		outputFile: outputFile,
+		errorFile:  errorFile,
+	}
 }
 
 func (i ioHandler) writeLine(line string) {
@@ -37,8 +45,7 @@ func (i ioHandler) writeError(message string) {
 }
 
 func (i ioHandler) readLine() (string, error) {
-	bio := bufio.NewReader(i.inputFile)
-	line, err := bio.ReadString('\n')
+	line, err := i.input.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
@@ -130,13 +137,8 @@ func (i ioHandler) writeAction(action interface{}) error {
 func New(
 	inputFile io.Reader, outputFile, errorFile io.Writer, recordProcessor RecordProcessor,
 ) *KCLProcess {
-	i := ioHandler{
-		inputFile:  inputFile,
-		outputFile: outputFile,
-		errorFile:  errorFile,
-	}
 	return &KCLProcess{
-		ioHandler:       i,
+		ioHandler:       newIOHandler(inputFile, outputFile, errorFile),
 		recordProcessor: recordProcessor,
 
 		nextCheckpointPair: SequencePair{},
