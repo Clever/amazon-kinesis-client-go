@@ -162,6 +162,53 @@ func TestProcessRecordsIgnoredMessages(t *testing.T) {
 	assert.Contains(mockcheckpointer.recievedSequences, "4")
 }
 
+func TestProcessRecordsSingleBatchBasic(t *testing.T) {
+	assert := assert.New(t)
+
+	mocklog := logger.New("testing")
+	mockconfig := withDefaults(Config{
+		BatchCount:     2,
+		CheckpointFreq: 1, // Don't throttle checks points
+	})
+	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
+	mocksender := NewMsgAsTagSender()
+
+	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt.Initialize("test-shard", mockcheckpointer)
+
+	err := wrt.ProcessRecords([]kcl.Record{
+		kcl.Record{SequenceNumber: "1", Data: encode("tag1")},
+		kcl.Record{SequenceNumber: "2", Data: encode("tag1")},
+		kcl.Record{SequenceNumber: "3", Data: encode("tag1")},
+		kcl.Record{SequenceNumber: "4", Data: encode("tag1")},
+	})
+	assert.NoError(err)
+	err = wrt.ProcessRecords([]kcl.Record{
+		kcl.Record{SequenceNumber: "5", Data: encode("tag1")},
+		kcl.Record{SequenceNumber: "6", Data: encode("tag1")},
+		kcl.Record{SequenceNumber: "7", Data: encode("tag1")},
+		kcl.Record{SequenceNumber: "8", Data: encode("tag1")},
+	})
+	assert.NoError(err)
+
+	err = wrt.Shutdown("TERMINATE")
+	assert.NoError(err)
+
+	err = mockcheckpointer.wait()
+	assert.NoError(err)
+
+	mocksender.Shutdown()
+
+	assert.Contains(mocksender.batches, "tag1")
+	assert.Equal(4, len(mocksender.batches["tag1"]))
+
+	assert.Contains(mockcheckpointer.recievedSequences, "2")
+	assert.Contains(mockcheckpointer.recievedSequences, "4")
+	assert.Contains(mockcheckpointer.recievedSequences, "6")
+	assert.Contains(mockcheckpointer.recievedSequences, "8")
+
+}
+
 func TestProcessRecordsMutliBatchBasic(t *testing.T) {
 	assert := assert.New(t)
 
