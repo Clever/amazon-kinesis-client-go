@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 	"time"
 )
@@ -181,12 +180,12 @@ func (kclp *KCLProcess) handleCheckpointAction(action ActionCheckpoint) error {
 		return fmt.Errorf("Encountered shutdown exception, skipping checkpoint")
 	case "ThrottlingException":
 		sleep := 5 * time.Second
-		fmt.Fprintf(os.Stderr, "Checkpointing throttling, pause for %s", sleep)
+		kclp.ioHandler.writeError(fmt.Sprintf("Checkpointing throttling, pause for %s", sleep))
 		time.Sleep(sleep)
 	case "InvalidStateException":
-		fmt.Fprintf(os.Stderr, "MultiLangDaemon invalid state while checkpointing")
+		kclp.ioHandler.writeError("MultiLangDaemon invalid state while checkpointing")
 	default:
-		fmt.Fprintf(os.Stderr, "Encountered an error while checkpointing: %s", msg)
+		kclp.ioHandler.writeError(fmt.Sprintf("Encountered an error while checkpointing: %s", msg))
 	}
 
 	seq := action.SequenceNumber
