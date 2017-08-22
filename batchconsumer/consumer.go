@@ -53,9 +53,8 @@ func withDefaults(config Config) Config {
 		config.BatchSize = 4 * 1024 * 1024
 	}
 
-	// Not totally clear we need this rate limit.  The KCL may do rate limiting for us.
 	if config.ReadRateLimit == 0 {
-		config.ReadRateLimit = 1000
+		config.ReadRateLimit = 2500
 	}
 	if config.ReadBurstLimit == 0 {
 		config.ReadBurstLimit = int(float64(config.ReadRateLimit)*1.2 + 0.5)
