@@ -28,7 +28,7 @@ func init() {
 				} else if d.category == "gauge" {
 					data[d.name] = d.value
 				} else {
-					log.ErrorD("unknow-stat-category", logger.M{"category": d.category})
+					log.ErrorD("unknown-stat-category", logger.M{"category": d.category})
 				}
 			case <-tick:
 				tmp := logger.M{}
