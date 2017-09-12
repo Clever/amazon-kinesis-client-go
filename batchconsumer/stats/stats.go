@@ -8,6 +8,19 @@ import (
 
 var log = logger.New("amazon-kinesis-client-go")
 
+// DefaultCounters are core counters tracked by the batchconsumer
+// These are stats we want to report on every tick, even if the values are zero
+var DefaultCounters = []string{
+	"batches-sent",
+	"checkpoints-sent",
+	"msg-batched",
+	"batch-log-failures",
+	"unknown-error",
+	"processed-messages",
+	"no-tags",
+	"black-tag",
+}
+
 type datum struct {
 	name     string
 	value    int
@@ -32,6 +45,9 @@ func init() {
 				}
 			case <-tick:
 				tmp := logger.M{}
+				for _, k := range DefaultCounters {
+					tmp[k] = 0
+				}
 				for k, v := range data {
 					tmp[k] = v
 				}
