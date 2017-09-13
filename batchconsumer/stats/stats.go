@@ -18,7 +18,7 @@ var DefaultCounters = []string{
 	"unknown-error",
 	"processed-messages",
 	"no-tags",
-	"black-tag",
+	"blank-tag",
 }
 
 type datum struct {
