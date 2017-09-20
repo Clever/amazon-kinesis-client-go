@@ -65,9 +65,11 @@ func unpack(input []byte) (LogEventBatch, error) {
 // RFC3339Micro is the RFC3339 format in microseconds
 const RFC3339Micro = "2006-01-02T15:04:05.999999-07:00"
 
+// http://docs.aws.amazon.com/batch/latest/userguide/job_states.html
+// "log stream name format is jobDefinitionName/default/ecs_task_id (this format may change in the future)."
 const taskMeta = `([a-z0-9-]+)--([a-z0-9-]+)\/` + // env--app
-	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/` + // task-id
-	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})` // container-id
+	`default\/` +
+	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})` // task-id
 
 var taskRegex = regexp.MustCompile(taskMeta)
 
