@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/Clever/syslogparser/rfc3164"
 )
@@ -173,6 +172,17 @@ func getStringArray(json map[string]interface{}, key string) []string {
 
 // LogRoutes a type alias to make it easier to add route specific filter functions
 type LogRoutes []map[string]interface{}
+
+// RuleNames returns a list of the names of the rules
+func (l LogRoutes) RuleNames() []string {
+	names := []string{}
+	for _, route := range l {
+		name := getStringValue(route, "rule")
+		names = append(names, name)
+	}
+
+	return names
+}
 
 // MetricsRoutes filters the LogRoutes and returns a list of MetricsRoutes structs
 func (l LogRoutes) MetricsRoutes() []MetricsRoute {
@@ -354,7 +364,7 @@ func ExtractKVMeta(kvlog map[string]interface{}) KVMeta {
 }
 
 // ParseAndEnhance extracts fields from a log line, and does some post-processing to rename/add fields
-func ParseAndEnhance(line string, env string, stringifyNested bool, renameESReservedFields bool, minimumTimestamp time.Time) (map[string]interface{}, error) {
+func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
 	out := map[string]interface{}{}
 
 	syslogFields, err := FieldsFromSyslog(line)
@@ -405,53 +415,7 @@ func ParseAndEnhance(line string, env string, stringifyNested bool, renameESRese
 		}
 	}
 
-	// ES dynamic mappings get finnicky once you start sending nested objects.
-	// E.g., if one app sends a field for the first time as an object, then any log
-	// sent by another app containing that field /not/ as an object will fail.
-	// One solution is to decode nested objects as strings.
-	if stringifyNested {
-		for k, v := range out {
-			_, ismap := v.(map[string]interface{})
-			_, isarr := v.([]interface{})
-			if ismap || isarr {
-				bs, _ := json.Marshal(v)
-				out[k] = string(bs)
-			}
-		}
-	}
-
-	// ES doesn't like fields that start with underscores.
-	if renameESReservedFields {
-		for oldKey, renamedKey := range esFieldRenames {
-			if val, ok := out[oldKey]; ok {
-				out[renamedKey] = val
-				delete(out, oldKey)
-			}
-		}
-	}
-
-	msgTime, ok := out["timestamp"].(time.Time)
-	if ok && !msgTime.After(minimumTimestamp) {
-		return map[string]interface{}{}, fmt.Errorf("message's timestamp < minimumTimestamp")
-	}
-
 	return out, nil
-}
-
-var esFieldRenames = map[string]string{
-	"_index":       "kv__index",
-	"_uid":         "kv__uid",
-	"_type":        "kv__type",
-	"_id":          "kv__id",
-	"_source":      "kv__source",
-	"_size":        "kv__size",
-	"_all":         "kv__all",
-	"_field_names": "kv__field_names",
-	"_timestamp":   "kv__timestamp",
-	"_ttl":         "kv__ttl",
-	"_parent":      "kv__parent",
-	"_routing":     "kv__routing",
-	"_meta":        "kv__meta",
 }
 
 const containerMeta = `([a-z0-9-]+)--([a-z0-9-]+)\/` + // env--app
