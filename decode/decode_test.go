@@ -2,6 +2,7 @@ package decode
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -188,16 +189,9 @@ func TestSyslogDecoding(t *testing.T) {
 	}
 }
 
-type ParseAndEnhanceInput struct {
-	Line                   string
-	StringifyNested        bool
-	RenameESReservedFields bool
-	MinimumTimestamp       time.Time
-}
-
 type ParseAndEnhanceSpec struct {
 	Title          string
-	Input          ParseAndEnhanceInput
+	Line           string
 	ExpectedOutput map[string]interface{}
 	ExpectedError  error
 }
@@ -219,7 +213,7 @@ func TestParseAndEnhance(t *testing.T) {
 	specs := []ParseAndEnhanceSpec{
 		ParseAndEnhanceSpec{
 			Title: "Parses a Kayvee log line from an ECS app",
-			Input: ParseAndEnhanceInput{Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished"}`},
+			Line:  `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished"}`,
 			ExpectedOutput: map[string]interface{}{
 				"timestamp":        logTime3,
 				"hostname":         "ip-10-0-0-0",
@@ -238,7 +232,7 @@ func TestParseAndEnhance(t *testing.T) {
 		},
 		ParseAndEnhanceSpec{
 			Title: "Parses a Kayvee log line from an ECS app, with override to container_app",
-			Input: ParseAndEnhanceInput{Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished","container_app":"force-app"}`},
+			Line:  `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished","container_app":"force-app"}`,
 			ExpectedOutput: map[string]interface{}{
 				"timestamp":        logTime3,
 				"hostname":         "ip-10-0-0-0",
@@ -257,7 +251,7 @@ func TestParseAndEnhance(t *testing.T) {
 		},
 		ParseAndEnhanceSpec{
 			Title: "Parses a non-Kayvee log line",
-			Input: ParseAndEnhanceInput{Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: some log`},
+			Line:  `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: some log`,
 			ExpectedOutput: map[string]interface{}{
 				"timestamp":      logTime3,
 				"hostname":       "ip-10-0-0-0",
@@ -272,13 +266,13 @@ func TestParseAndEnhance(t *testing.T) {
 		},
 		ParseAndEnhanceSpec{
 			Title:          "Fails to parse non-RSyslog log line",
-			Input:          ParseAndEnhanceInput{Line: `not rsyslog`},
+			Line:           `not rsyslog`,
 			ExpectedOutput: map[string]interface{}{},
 			ExpectedError:  &syslogparser.ParserError{},
 		},
 		ParseAndEnhanceSpec{
 			Title: "Parses JSON values",
-			Input: ParseAndEnhanceInput{Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "nested": {"a":"b"}}`},
+			Line:  `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "nested": {"a":"b"}}`,
 			ExpectedOutput: map[string]interface{}{
 				"timestamp":        logTime3,
 				"hostname":         "ip-10-0-0-0",
@@ -297,140 +291,8 @@ func TestParseAndEnhance(t *testing.T) {
 			ExpectedError: nil,
 		},
 		ParseAndEnhanceSpec{
-			Title: "Has the option to stringify object values",
-			Input: ParseAndEnhanceInput{
-				Line:            `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "nested": {"a":"b"}}`,
-				StringifyNested: true,
-			},
-			ExpectedOutput: map[string]interface{}{
-				"timestamp":        logTime3,
-				"hostname":         "ip-10-0-0-0",
-				"programname":      `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
-				"rawlog":           `2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "nested": {"a":"b"}}`,
-				"title":            "request_finished",
-				"decoder_msg_type": "Kayvee",
-				"prefix":           "2017/04/05 21:57:46 some_file.go:10: ",
-				"postfix":          "",
-				"env":              "deploy-env",
-				"container_env":    "env",
-				"container_app":    "app",
-				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-				"nested":           `{"a":"b"}`,
-			},
-			ExpectedError: nil,
-		},
-		ParseAndEnhanceSpec{
-			Title: "Has the option to stringify array values",
-			Input: ParseAndEnhanceInput{
-				Line:            `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "nested": [{"a":"b"}]}`,
-				StringifyNested: true,
-			},
-			ExpectedOutput: map[string]interface{}{
-				"timestamp":        logTime3,
-				"hostname":         "ip-10-0-0-0",
-				"programname":      `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
-				"rawlog":           `2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "nested": [{"a":"b"}]}`,
-				"title":            "request_finished",
-				"decoder_msg_type": "Kayvee",
-				"prefix":           "2017/04/05 21:57:46 some_file.go:10: ",
-				"postfix":          "",
-				"env":              "deploy-env",
-				"container_env":    "env",
-				"container_app":    "app",
-				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-				"nested":           `[{"a":"b"}]`,
-			},
-			ExpectedError: nil,
-		},
-		ParseAndEnhanceSpec{
-			Title: "Has the option to rename reserved ES fields",
-			Input: ParseAndEnhanceInput{
-				Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "_source": "a"}`,
-				RenameESReservedFields: true,
-			},
-			ExpectedOutput: map[string]interface{}{
-				"timestamp":        logTime3,
-				"hostname":         "ip-10-0-0-0",
-				"programname":      `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
-				"rawlog":           `2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "_source": "a"}`,
-				"title":            "request_finished",
-				"decoder_msg_type": "Kayvee",
-				"prefix":           "2017/04/05 21:57:46 some_file.go:10: ",
-				"postfix":          "",
-				"env":              "deploy-env",
-				"container_env":    "env",
-				"container_app":    "app",
-				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-				"kv__source":       "a",
-			},
-			ExpectedError: nil,
-		},
-		ParseAndEnhanceSpec{
-			Title: "Errors if logTime < MinimumTimestamp",
-			Input: ParseAndEnhanceInput{
-				Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "_source": "a"}`,
-				RenameESReservedFields: true,
-				MinimumTimestamp:       time.Now().Add(100 * time.Hour * 24 * 365), // good thru year 2117
-			},
-			ExpectedOutput: map[string]interface{}{},
-			ExpectedError:  fmt.Errorf(""),
-		},
-		ParseAndEnhanceSpec{
-			Title: "Accepts logs if logTime > MinimumTimestamp",
-			Input: ParseAndEnhanceInput{
-				Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "_source": "a"}`,
-				RenameESReservedFields: true,
-				MinimumTimestamp:       time.Now().Add(-100 * time.Hour * 24 * 365), // good thru year 2117
-			},
-			ExpectedOutput: map[string]interface{}{
-				"timestamp":        logTime3,
-				"hostname":         "ip-10-0-0-0",
-				"programname":      `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
-				"rawlog":           `2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "_source": "a"}`,
-				"title":            "request_finished",
-				"decoder_msg_type": "Kayvee",
-				"prefix":           "2017/04/05 21:57:46 some_file.go:10: ",
-				"postfix":          "",
-				"env":              "deploy-env",
-				"container_env":    "env",
-				"container_app":    "app",
-				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-				"kv__source":       "a",
-			},
-			ExpectedError: nil,
-		},
-		ParseAndEnhanceSpec{
-			Title: "Accepts logs if logTime > MinimumTimestamp",
-			Input: ParseAndEnhanceInput{
-				Line: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef[3291]: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "_source": "a"}`,
-				RenameESReservedFields: true,
-				MinimumTimestamp:       time.Now().Add(-100 * time.Hour * 24 * 365), // good thru year 2117
-			},
-			ExpectedOutput: map[string]interface{}{
-				"timestamp":        logTime3,
-				"hostname":         "ip-10-0-0-0",
-				"programname":      `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
-				"rawlog":           `2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished", "_source": "a"}`,
-				"title":            "request_finished",
-				"decoder_msg_type": "Kayvee",
-				"prefix":           "2017/04/05 21:57:46 some_file.go:10: ",
-				"postfix":          "",
-				"env":              "deploy-env",
-				"container_env":    "env",
-				"container_app":    "app",
-				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-				"kv__source":       "a",
-			},
-			ExpectedError: nil,
-		},
-		ParseAndEnhanceSpec{
 			Title: "Log with timestamp time.RFC3339 format",
-			Input: ParseAndEnhanceInput{
-				Line: `2017-04-05T21:57:46+00:00 mongo-docker-pipeline-r10-4 diamond[24099] ` +
-					`Signal Received: 15`,
-				RenameESReservedFields: true,
-				MinimumTimestamp:       time.Now().Add(-100 * time.Hour * 24 * 365), // year 2117
-			},
+			Line:  `2017-04-05T21:57:46+00:00 mongo-docker-pipeline-r10-4 diamond[24099] Signal Received: 15`,
 			ExpectedOutput: map[string]interface{}{
 				"env":         "deploy-env",
 				"hostname":    "mongo-docker-pipeline-r10-4",
@@ -443,7 +305,7 @@ func TestParseAndEnhance(t *testing.T) {
 	for _, spec := range specs {
 		t.Run(fmt.Sprintf(spec.Title), func(t *testing.T) {
 			assert := assert.New(t)
-			fields, err := ParseAndEnhance(spec.Input.Line, "deploy-env", spec.Input.StringifyNested, spec.Input.RenameESReservedFields, spec.Input.MinimumTimestamp)
+			fields, err := ParseAndEnhance(spec.Line, "deploy-env")
 			if spec.ExpectedError != nil {
 				assert.Error(err)
 				assert.IsType(spec.ExpectedError, err)
@@ -523,6 +385,7 @@ func TestExtractKVMeta(t *testing.T) {
 		Team                       string
 		Language                   string
 		Version                    string
+		Names                      []string
 		ExpectedMetricsRoutes      []MetricsRoute
 		ExpectedAnalyticsRoutes    []AnalyticsRoute
 		ExpectedNotificationRoutes []NotificationRoute
@@ -530,10 +393,12 @@ func TestExtractKVMeta(t *testing.T) {
 	}{
 		{
 			Description: "log line with no routes",
+			Names:       []string{},
 			Log:         map[string]interface{}{"hi": "hello!"},
 		},
 		{
 			Description: "empty _kvmeta",
+			Names:       []string{},
 			Log: map[string]interface{}{
 				"hi":      "hello!",
 				"_kvmeta": map[string]interface{}{},
@@ -544,6 +409,7 @@ func TestExtractKVMeta(t *testing.T) {
 			Team:        "green",
 			Version:     "three",
 			Language:    "tree",
+			Names:       []string{},
 			Log: map[string]interface{}{
 				"hi": "hello!",
 				"_kvmeta": map[string]interface{}{
@@ -558,6 +424,7 @@ func TestExtractKVMeta(t *testing.T) {
 			Team:        "green",
 			Version:     "three",
 			Language:    "tree",
+			Names:       []string{"cool", "cool2"},
 			ExpectedMetricsRoutes: []MetricsRoute{
 				{
 					Series:     "1,1,2,3,5,8,13",
@@ -601,6 +468,7 @@ func TestExtractKVMeta(t *testing.T) {
 			Team:        "green",
 			Version:     "christmas",
 			Language:    "tree",
+			Names:       []string{"what's-this?", "there's-app-invites-everywhere"},
 			ExpectedAnalyticsRoutes: []AnalyticsRoute{
 				{
 					Series:   "what-is-this",
@@ -637,6 +505,7 @@ func TestExtractKVMeta(t *testing.T) {
 			Team:        "slack",
 			Version:     "evergreen",
 			Language:    "markdown-ish",
+			Names:       []string{"did-you-know", "what's-the-catch"},
 			ExpectedNotificationRoutes: []NotificationRoute{
 				{
 					RuleName: "did-you-know",
@@ -683,6 +552,7 @@ func TestExtractKVMeta(t *testing.T) {
 			Team:        "a-team",
 			Version:     "old",
 			Language:    "jive",
+			Names:       []string{"last-call", "watch-out-now"},
 			ExpectedAlertRoutes: []AlertRoute{
 				{
 					RuleName:   "last-call",
@@ -729,6 +599,9 @@ func TestExtractKVMeta(t *testing.T) {
 			Team:        "diversity",
 			Version:     "kv-routes",
 			Language:    "understanding",
+			Names: []string{
+				"all-combos", "there's-app-invites-everywhere", "what's-the-catch", "last-call",
+			},
 			ExpectedMetricsRoutes: []MetricsRoute{
 				{
 					RuleName:   "all-combos",
@@ -807,6 +680,10 @@ func TestExtractKVMeta(t *testing.T) {
 		assert.Equal(test.Language, kvmeta.Language)
 		assert.Equal(test.Version, kvmeta.Version)
 
+		assert.EqualValues(
+			sort.StringSlice(test.Names), sort.StringSlice(kvmeta.Routes.RuleNames()),
+		)
+
 		assert.Equal(len(test.ExpectedMetricsRoutes), len(kvmeta.Routes.MetricsRoutes()))
 		for idx, route := range kvmeta.Routes.MetricsRoutes() {
 			expected := test.ExpectedMetricsRoutes[idx]
@@ -853,7 +730,7 @@ func BenchmarkFieldsFromSyslog(b *testing.B) {
 
 func BenchmarkParseAndEnhance(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		_, err := ParseAndEnhance(benchmarkLine, "env", false, false, time.Time{})
+		_, err := ParseAndEnhance(benchmarkLine, "env")
 		if err != nil {
 			b.FailNow()
 		}
