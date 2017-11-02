@@ -15,9 +15,10 @@ import (
 )
 
 type batchedWriter struct {
-	config Config
-	sender Sender
-	log    kv.KayveeLogger
+	config         Config
+	sender         Sender
+	log            kv.KayveeLogger
+	failedLogsFile kv.KayveeLogger
 
 	shardID string
 
@@ -30,11 +31,12 @@ type batchedWriter struct {
 	lastProcessedSeq kcl.SequencePair
 }
 
-func NewBatchedWriter(config Config, sender Sender, log kv.KayveeLogger) *batchedWriter {
+func NewBatchedWriter(config Config, sender Sender, log kv.KayveeLogger, failedLogsFile kv.KayveeLogger) *batchedWriter {
 	return &batchedWriter{
-		config: config,
-		sender: sender,
-		log:    log,
+		config:         config,
+		sender:         sender,
+		log:            log,
+		failedLogsFile: failedLogsFile,
 
 		rateLimiter: rate.NewLimiter(rate.Limit(config.ReadRateLimit), config.ReadBurstLimit),
 	}
@@ -50,7 +52,7 @@ func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer
 	}
 
 	b.chkpntManager = newCheckpointManager(checkpointer, b.config.CheckpointFreq, b.log)
-	b.batcherManager = newBatcherManager(b.sender, b.chkpntManager, bmConfig, b.log)
+	b.batcherManager = newBatcherManager(b.sender, b.chkpntManager, bmConfig, b.log, b.failedLogsFile)
 
 	return nil
 }

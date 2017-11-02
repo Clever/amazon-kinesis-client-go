@@ -23,9 +23,10 @@ type batcherManagerConfig struct {
 }
 
 type batcherManager struct {
-	log           kv.KayveeLogger
-	sender        Sender
-	chkpntManager *checkpointManager
+	log            kv.KayveeLogger
+	failedLogsFile kv.KayveeLogger
+	sender         Sender
+	chkpntManager  *checkpointManager
 
 	batchCount    int
 	batchSize     int
@@ -38,12 +39,14 @@ type batcherManager struct {
 }
 
 func newBatcherManager(
-	sender Sender, chkpntManager *checkpointManager, cfg batcherManagerConfig, log kv.KayveeLogger,
+	sender Sender, chkpntManager *checkpointManager, cfg batcherManagerConfig,
+	log kv.KayveeLogger, failedLogsFile kv.KayveeLogger,
 ) *batcherManager {
 	bm := &batcherManager{
-		log:           log,
-		sender:        sender,
-		chkpntManager: chkpntManager,
+		log:            log,
+		failedLogsFile: failedLogsFile,
+		sender:         sender,
+		chkpntManager:  chkpntManager,
 
 		batchCount:    cfg.BatchCount,
 		batchSize:     cfg.BatchSize,
@@ -98,7 +101,7 @@ func (b *batcherManager) sendBatch(batcher *batcher, tag string) {
 	case PartialSendBatchError:
 		b.log.ErrorD("send-batch", kv.M{"msg": e.Error()})
 		for _, line := range e.FailedMessages {
-			b.log.ErrorD("failed-log", kv.M{"log": line})
+			b.failedLogsFile.ErrorD("failed-log", kv.M{"log": line})
 		}
 		stats.Counter("batch-log-failures", len(e.FailedMessages))
 	case CatastrophicSendBatchError:

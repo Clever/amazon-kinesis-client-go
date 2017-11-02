@@ -142,7 +142,7 @@ func TestProcessRecordsIgnoredMessages(t *testing.T) {
 	})
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 
-	wrt := NewBatchedWriter(mockconfig, ignoringSender{}, mocklog)
+	wrt := NewBatchedWriter(mockconfig, ignoringSender{}, mocklog, mocklog)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -173,7 +173,7 @@ func TestProcessRecordsSingleBatchBasic(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog, mocklog)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -220,7 +220,7 @@ func TestProcessRecordsMutliBatchBasic(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog, mocklog)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -278,7 +278,7 @@ func TestProcessRecordsMutliBatchWithIgnores(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog, mocklog)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -355,7 +355,7 @@ func TestStaggeredCheckpionting(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog, mocklog)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{

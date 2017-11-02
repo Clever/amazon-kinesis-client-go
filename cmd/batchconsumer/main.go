@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	"gopkg.in/Clever/kayvee-go.v6/logger"
@@ -11,30 +9,16 @@ import (
 	kbc "github.com/Clever/amazon-kinesis-client-go/batchconsumer"
 )
 
-func createDummyOutput() (logger.KayveeLogger, *os.File) {
-	file, err := os.OpenFile("/tmp/example-kcl-output", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("Unable to create log file: %s", err.Error())
-	}
-
-	kvlog := logger.New("amazon-kinesis-client-go")
-	kvlog.SetOutput(file)
-
-	return kvlog, file
-}
-
 func main() {
 	config := kbc.Config{
-		BatchInterval: 10 * time.Second,
-		BatchCount:    500,
-		BatchSize:     4 * 1024 * 1024, // 4Mb
-		LogFile:       "/tmp/example-kcl-consumer",
+		BatchInterval:  10 * time.Second,
+		BatchCount:     500,
+		BatchSize:      4 * 1024 * 1024, // 4Mb
+		Logger:         logger.New("amazon-kinesis-client-go"),
+		FailedLogsFile: "/tmp/example-kcl-consumer",
 	}
 
-	output, file := createDummyOutput()
-	defer file.Close()
-
-	sender := &exampleSender{output: output}
+	sender := &exampleSender{output: logger.New("fake-output")}
 	consumer := kbc.NewBatchConsumer(config, sender)
 	consumer.Start()
 }
