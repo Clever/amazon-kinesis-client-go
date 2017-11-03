@@ -135,14 +135,14 @@ func encode(str string) string {
 func TestProcessRecordsIgnoredMessages(t *testing.T) {
 	assert := assert.New(t)
 
-	mocklog := logger.New("testing")
+	mockFailedLogsFile := logger.New("testing")
 	mockconfig := withDefaults(Config{
 		BatchInterval:  10 * time.Millisecond,
 		CheckpointFreq: 20 * time.Millisecond,
 	})
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 
-	wrt := NewBatchedWriter(mockconfig, ignoringSender{}, mocklog)
+	wrt := NewBatchedWriter(mockconfig, ignoringSender{}, mockFailedLogsFile)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -165,7 +165,7 @@ func TestProcessRecordsIgnoredMessages(t *testing.T) {
 func TestProcessRecordsSingleBatchBasic(t *testing.T) {
 	assert := assert.New(t)
 
-	mocklog := logger.New("testing")
+	mockFailedLogsFile := logger.New("testing")
 	mockconfig := withDefaults(Config{
 		BatchCount:     2,
 		CheckpointFreq: 1, // Don't throttle checks points
@@ -173,7 +173,7 @@ func TestProcessRecordsSingleBatchBasic(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mockFailedLogsFile)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -212,7 +212,7 @@ func TestProcessRecordsSingleBatchBasic(t *testing.T) {
 func TestProcessRecordsMutliBatchBasic(t *testing.T) {
 	assert := assert.New(t)
 
-	mocklog := logger.New("testing")
+	mockFailedLogsFile := logger.New("testing")
 	mockconfig := withDefaults(Config{
 		BatchInterval:  100 * time.Millisecond,
 		CheckpointFreq: 200 * time.Millisecond,
@@ -220,7 +220,7 @@ func TestProcessRecordsMutliBatchBasic(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mockFailedLogsFile)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -270,7 +270,7 @@ func TestProcessRecordsMutliBatchBasic(t *testing.T) {
 func TestProcessRecordsMutliBatchWithIgnores(t *testing.T) {
 	assert := assert.New(t)
 
-	mocklog := logger.New("testing")
+	mockFailedLogsFile := logger.New("testing")
 	mockconfig := withDefaults(Config{
 		BatchInterval:  100 * time.Millisecond,
 		CheckpointFreq: 200 * time.Millisecond,
@@ -278,7 +278,7 @@ func TestProcessRecordsMutliBatchWithIgnores(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mockFailedLogsFile)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{
@@ -346,7 +346,7 @@ func TestProcessRecordsMutliBatchWithIgnores(t *testing.T) {
 func TestStaggeredCheckpionting(t *testing.T) {
 	assert := assert.New(t)
 
-	mocklog := logger.New("testing")
+	mockFailedLogsFile := logger.New("testing")
 	mockconfig := withDefaults(Config{
 		BatchCount:     2,
 		BatchInterval:  100 * time.Millisecond,
@@ -355,7 +355,7 @@ func TestStaggeredCheckpionting(t *testing.T) {
 	mockcheckpointer := NewMockCheckpointer(5 * time.Second)
 	mocksender := NewMsgAsTagSender()
 
-	wrt := NewBatchedWriter(mockconfig, mocksender, mocklog)
+	wrt := NewBatchedWriter(mockconfig, mocksender, mockFailedLogsFile)
 	wrt.Initialize("test-shard", mockcheckpointer)
 
 	err := wrt.ProcessRecords([]kcl.Record{

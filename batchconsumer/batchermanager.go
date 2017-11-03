@@ -10,6 +10,8 @@ import (
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
+var lg = kv.New("amazon-kinesis-client-go")
+
 type tagMsgPair struct {
 	tag  string
 	msg  []byte
@@ -23,9 +25,9 @@ type batcherManagerConfig struct {
 }
 
 type batcherManager struct {
-	log           kv.KayveeLogger
-	sender        Sender
-	chkpntManager *checkpointManager
+	failedLogsFile kv.KayveeLogger
+	sender         Sender
+	chkpntManager  *checkpointManager
 
 	batchCount    int
 	batchSize     int
@@ -38,12 +40,12 @@ type batcherManager struct {
 }
 
 func newBatcherManager(
-	sender Sender, chkpntManager *checkpointManager, cfg batcherManagerConfig, log kv.KayveeLogger,
+	sender Sender, chkpntManager *checkpointManager, cfg batcherManagerConfig, failedLogsFile kv.KayveeLogger,
 ) *batcherManager {
 	bm := &batcherManager{
-		log:           log,
-		sender:        sender,
-		chkpntManager: chkpntManager,
+		failedLogsFile: failedLogsFile,
+		sender:         sender,
+		chkpntManager:  chkpntManager,
 
 		batchCount:    cfg.BatchCount,
 		batchSize:     cfg.BatchSize,
@@ -96,16 +98,16 @@ func (b *batcherManager) sendBatch(batcher *batcher, tag string) {
 	switch e := err.(type) {
 	case nil: // Do nothing
 	case PartialSendBatchError:
-		b.log.ErrorD("send-batch", kv.M{"msg": e.Error()})
+		lg.ErrorD("send-batch", kv.M{"msg": e.Error()})
 		for _, line := range e.FailedMessages {
-			b.log.ErrorD("failed-log", kv.M{"log": line})
+			b.failedLogsFile.ErrorD("failed-log", kv.M{"log": line})
 		}
 		stats.Counter("batch-log-failures", len(e.FailedMessages))
 	case CatastrophicSendBatchError:
-		b.log.CriticalD("send-batch", kv.M{"msg": e.Error()})
+		lg.CriticalD("send-batch", kv.M{"msg": e.Error()})
 		os.Exit(1)
 	default:
-		b.log.CriticalD("send-batch", kv.M{"msg": e.Error()})
+		lg.CriticalD("send-batch", kv.M{"msg": e.Error()})
 		os.Exit(1)
 	}
 
@@ -184,8 +186,14 @@ func (b *batcherManager) startMessageHandler(
 
 					batcher.AddMessage(tmp.msg, tmp.pair)
 				} else if err != nil {
-					b.log.ErrorD("add-message", kv.M{
-						"err": err.Error(), "msg": string(tmp.msg), "tag": tmp.tag,
+					lg.ErrorD("add-message", kv.M{
+						"err": err.Error(),
+						"tag": tmp.tag,
+					})
+					b.failedLogsFile.ErrorD("add-message", kv.M{
+						"err": err.Error(),
+						"msg": string(tmp.msg),
+						"tag": tmp.tag,
 					})
 				}
 				stats.Counter("msg-batched", 1)

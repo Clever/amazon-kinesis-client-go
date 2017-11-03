@@ -13,8 +13,8 @@ import (
 
 // Config used for BatchConsumer constructor.  Any empty fields are populated with defaults.
 type Config struct {
-	// LogFile where consumer errors and failed log lines are saved
-	LogFile string
+	// FailedLogsFile is where logs that failed to process are written.
+	FailedLogsFile string
 
 	// BatchInterval the upper bound on how often SendBatch is called with accumulated messages
 	BatchInterval time.Duration
@@ -34,13 +34,13 @@ type Config struct {
 
 // BatchConsumer is responsible for marshalling
 type BatchConsumer struct {
-	kclProcess *kcl.KCLProcess
-	logfile    *os.File
+	kclProcess     *kcl.KCLProcess
+	failedLogsFile *os.File
 }
 
 func withDefaults(config Config) Config {
-	if config.LogFile == "" {
-		config.LogFile = "/tmp/kcl-" + time.Now().Format(time.RFC3339)
+	if config.FailedLogsFile == "" {
+		config.FailedLogsFile = "/tmp/kcl-" + time.Now().Format(time.RFC3339)
 	}
 
 	if config.BatchInterval == 0 {
@@ -74,20 +74,19 @@ func NewBatchConsumerFromFiles(
 ) *BatchConsumer {
 	config = withDefaults(config)
 
-	file, err := os.OpenFile(config.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile(config.FailedLogsFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("Unable to create log file: %s", err.Error())
 	}
+	failedLogsFile := logger.New("amazon-kinesis-client-go/batchconsumer")
+	failedLogsFile.SetOutput(file)
 
-	kvlog := logger.New("amazon-kinesis-client-go")
-	kvlog.SetOutput(file)
-
-	wrt := NewBatchedWriter(config, sender, kvlog)
+	wrt := NewBatchedWriter(config, sender, failedLogsFile)
 	kclProcess := kcl.New(input, output, errFile, wrt)
 
 	return &BatchConsumer{
-		kclProcess: kclProcess,
-		logfile:    file,
+		kclProcess:     kclProcess,
+		failedLogsFile: file,
 	}
 }
 
@@ -100,5 +99,5 @@ func NewBatchConsumer(config Config, sender Sender) *BatchConsumer {
 // Start when called, the consumer begins ingesting messages.  This function blocks.
 func (b *BatchConsumer) Start() {
 	b.kclProcess.Run()
-	b.logfile.Close()
+	b.failedLogsFile.Close()
 }

@@ -3,15 +3,11 @@ package batchconsumer
 import (
 	"time"
 
-	kv "gopkg.in/Clever/kayvee-go.v6/logger"
-
 	"github.com/Clever/amazon-kinesis-client-go/batchconsumer/stats"
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
 type checkpointManager struct {
-	log kv.KayveeLogger
-
 	checkpointFreq time.Duration
 
 	checkpoint chan kcl.SequencePair
@@ -19,12 +15,8 @@ type checkpointManager struct {
 	shutdown chan chan<- struct{}
 }
 
-func newCheckpointManager(
-	checkpointer kcl.Checkpointer, checkpointFreq time.Duration, log kv.KayveeLogger,
-) *checkpointManager {
+func newCheckpointManager(checkpointer kcl.Checkpointer, checkpointFreq time.Duration) *checkpointManager {
 	cm := &checkpointManager{
-		log: log,
-
 		checkpointFreq: checkpointFreq,
 
 		checkpoint: make(chan kcl.SequencePair),
