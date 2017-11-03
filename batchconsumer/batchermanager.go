@@ -187,7 +187,13 @@ func (b *batcherManager) startMessageHandler(
 					batcher.AddMessage(tmp.msg, tmp.pair)
 				} else if err != nil {
 					lg.ErrorD("add-message", kv.M{
-						"err": err.Error(), "msg": string(tmp.msg), "tag": tmp.tag,
+						"err": err.Error(),
+						"tag": tmp.tag,
+					})
+					b.failedLogsFile.ErrorD("add-message", kv.M{
+						"err": err.Error(),
+						"msg": string(tmp.msg),
+						"tag": tmp.tag,
 					})
 				}
 				stats.Counter("msg-batched", 1)
