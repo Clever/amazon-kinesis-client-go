@@ -14,7 +14,6 @@ func main() {
 		BatchInterval:  10 * time.Second,
 		BatchCount:     500,
 		BatchSize:      4 * 1024 * 1024, // 4Mb
-		Logger:         logger.New("amazon-kinesis-client-go"),
 		FailedLogsFile: "/tmp/example-kcl-consumer",
 	}
 

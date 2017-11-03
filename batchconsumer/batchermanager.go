@@ -10,6 +10,8 @@ import (
 	"github.com/Clever/amazon-kinesis-client-go/kcl"
 )
 
+var lg = kv.New("amazon-kinesis-client-go")
+
 type tagMsgPair struct {
 	tag  string
 	msg  []byte
@@ -23,7 +25,6 @@ type batcherManagerConfig struct {
 }
 
 type batcherManager struct {
-	log            kv.KayveeLogger
 	failedLogsFile kv.KayveeLogger
 	sender         Sender
 	chkpntManager  *checkpointManager
@@ -39,11 +40,9 @@ type batcherManager struct {
 }
 
 func newBatcherManager(
-	sender Sender, chkpntManager *checkpointManager, cfg batcherManagerConfig,
-	log kv.KayveeLogger, failedLogsFile kv.KayveeLogger,
+	sender Sender, chkpntManager *checkpointManager, cfg batcherManagerConfig, failedLogsFile kv.KayveeLogger,
 ) *batcherManager {
 	bm := &batcherManager{
-		log:            log,
 		failedLogsFile: failedLogsFile,
 		sender:         sender,
 		chkpntManager:  chkpntManager,
@@ -99,16 +98,16 @@ func (b *batcherManager) sendBatch(batcher *batcher, tag string) {
 	switch e := err.(type) {
 	case nil: // Do nothing
 	case PartialSendBatchError:
-		b.log.ErrorD("send-batch", kv.M{"msg": e.Error()})
+		lg.ErrorD("send-batch", kv.M{"msg": e.Error()})
 		for _, line := range e.FailedMessages {
 			b.failedLogsFile.ErrorD("failed-log", kv.M{"log": line})
 		}
 		stats.Counter("batch-log-failures", len(e.FailedMessages))
 	case CatastrophicSendBatchError:
-		b.log.CriticalD("send-batch", kv.M{"msg": e.Error()})
+		lg.CriticalD("send-batch", kv.M{"msg": e.Error()})
 		os.Exit(1)
 	default:
-		b.log.CriticalD("send-batch", kv.M{"msg": e.Error()})
+		lg.CriticalD("send-batch", kv.M{"msg": e.Error()})
 		os.Exit(1)
 	}
 
@@ -187,7 +186,7 @@ func (b *batcherManager) startMessageHandler(
 
 					batcher.AddMessage(tmp.msg, tmp.pair)
 				} else if err != nil {
-					b.log.ErrorD("add-message", kv.M{
+					lg.ErrorD("add-message", kv.M{
 						"err": err.Error(), "msg": string(tmp.msg), "tag": tmp.tag,
 					})
 				}

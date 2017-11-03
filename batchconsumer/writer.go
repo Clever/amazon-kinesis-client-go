@@ -17,7 +17,6 @@ import (
 type batchedWriter struct {
 	config         Config
 	sender         Sender
-	log            kv.KayveeLogger
 	failedLogsFile kv.KayveeLogger
 
 	shardID string
@@ -31,11 +30,10 @@ type batchedWriter struct {
 	lastProcessedSeq kcl.SequencePair
 }
 
-func NewBatchedWriter(config Config, sender Sender, log kv.KayveeLogger, failedLogsFile kv.KayveeLogger) *batchedWriter {
+func NewBatchedWriter(config Config, sender Sender, failedLogsFile kv.KayveeLogger) *batchedWriter {
 	return &batchedWriter{
 		config:         config,
 		sender:         sender,
-		log:            log,
 		failedLogsFile: failedLogsFile,
 
 		rateLimiter: rate.NewLimiter(rate.Limit(config.ReadRateLimit), config.ReadBurstLimit),
@@ -51,8 +49,8 @@ func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer
 		BatchInterval: b.config.BatchInterval,
 	}
 
-	b.chkpntManager = newCheckpointManager(checkpointer, b.config.CheckpointFreq, b.log)
-	b.batcherManager = newBatcherManager(b.sender, b.chkpntManager, bmConfig, b.log, b.failedLogsFile)
+	b.chkpntManager = newCheckpointManager(checkpointer, b.config.CheckpointFreq)
+	b.batcherManager = newBatcherManager(b.sender, b.chkpntManager, bmConfig, b.failedLogsFile)
 
 	return nil
 }
@@ -105,20 +103,20 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 				continue // Skip message
 			} else if err != nil {
 				stats.Counter("unknown-error", 1)
-				b.log.ErrorD("process-message", kv.M{"msg": err.Error(), "rawmsg": string(rawmsg)})
+				lg.ErrorD("process-message", kv.M{"msg": err.Error(), "rawmsg": string(rawmsg)})
 				continue // Don't stop processing messages because of one bad message
 			}
 
 			if len(tags) == 0 {
 				stats.Counter("no-tags", 1)
-				b.log.ErrorD("no-tags", kv.M{"rawmsg": string(rawmsg)})
+				lg.ErrorD("no-tags", kv.M{"rawmsg": string(rawmsg)})
 				return fmt.Errorf("No tags provided by consumer for log: %s", string(rawmsg))
 			}
 
 			for _, tag := range tags {
 				if tag == "" {
 					stats.Counter("blank-tag", 1)
-					b.log.ErrorD("blank-tag", kv.M{"rawmsg": string(rawmsg)})
+					lg.ErrorD("blank-tag", kv.M{"rawmsg": string(rawmsg)})
 					return fmt.Errorf("Blank tag provided by consumer for log: %s", string(rawmsg))
 				}
 
@@ -146,9 +144,9 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 
 func (b *batchedWriter) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
-		b.log.InfoD("terminate-signal", kv.M{"shard-id": b.shardID})
+		lg.InfoD("terminate-signal", kv.M{"shard-id": b.shardID})
 	} else {
-		b.log.ErrorD("shutdown-failover", kv.M{"shard-id": b.shardID, "reason": reason})
+		lg.ErrorD("shutdown-failover", kv.M{"shard-id": b.shardID, "reason": reason})
 	}
 
 	done := b.batcherManager.Shutdown()

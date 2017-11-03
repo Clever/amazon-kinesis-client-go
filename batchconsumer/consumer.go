@@ -13,9 +13,6 @@ import (
 
 // Config used for BatchConsumer constructor.  Any empty fields are populated with defaults.
 type Config struct {
-	// Logger for logging info / error logs.
-	Logger logger.KayveeLogger
-
 	// FailedLogsFile is where logs that failed to process are written.
 	FailedLogsFile string
 
@@ -42,10 +39,6 @@ type BatchConsumer struct {
 }
 
 func withDefaults(config Config) Config {
-	if config.Logger == nil {
-		config.Logger = logger.New("amazon-kinesis-client-go")
-	}
-
 	if config.FailedLogsFile == "" {
 		config.FailedLogsFile = "/tmp/kcl-" + time.Now().Format(time.RFC3339)
 	}
@@ -85,10 +78,10 @@ func NewBatchConsumerFromFiles(
 	if err != nil {
 		log.Fatalf("Unable to create log file: %s", err.Error())
 	}
-	failedLogsFile := logger.New("amazon-kinesis-client-go")
+	failedLogsFile := logger.New("amazon-kinesis-client-go/batchconsumer")
 	failedLogsFile.SetOutput(file)
 
-	wrt := NewBatchedWriter(config, sender, config.Logger, failedLogsFile)
+	wrt := NewBatchedWriter(config, sender, failedLogsFile)
 	kclProcess := kcl.New(input, output, errFile, wrt)
 
 	return &BatchConsumer{
