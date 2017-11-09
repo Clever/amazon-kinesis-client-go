@@ -5,7 +5,7 @@ SHELL := /bin/bash
 PKG := github.com/Clever/amazon-kinesis-client-go
 PKGS := $(shell go list ./... | grep -v /vendor )
 .PHONY: download_jars run build
-$(eval $(call golang-version-check,1.8))
+$(eval $(call golang-version-check,1.9))
 
 CONSUMER ?= consumer
 TMP_DIR := ./tmp-jars
@@ -58,8 +58,8 @@ test: $(PKGS)
 $(PKGS): golang-test-all-deps
 	$(call golang-test-all,$@)
 
-$(GOPATH)/bin/glide:
-	@go get github.com/Masterminds/glide
 
-install_deps: $(GOPATH)/bin/glide
-	@$(GOPATH)/bin/glide install
+
+
+install_deps: golang-dep-vendor-deps
+	$(call golang-dep-vendor)
