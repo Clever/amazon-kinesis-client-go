@@ -108,8 +108,9 @@ var awsBatchTaskRegex = regexp.MustCompile(awsBatchTaskMeta)
 var awsLambdaLogGroupRegex = regexp.MustCompile(`^/aws/lambda/([a-z0-9-]+)--([a-z0-9-]+)$`)
 var awsLambdaRequestIDRegex = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
-// arn cruft to satisfy parsing later on: https://github.com/Clever/amazon-kinesis-client-go/blob/94aacdf8339bd2cc8400d3bcb323dc1bce2c8422/decode/decode.go#L421-L425
+// arn and task cruft to satisfy parsing later on: https://github.com/Clever/amazon-kinesis-client-go/blob/94aacdf8339bd2cc8400d3bcb323dc1bce2c8422/decode/decode.go#L421-L425
 const arnCruft = `/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F`
+const taskCruft = `12345678-1234-1234-1234-555566667777`
 
 type RSysLogMessage struct {
 	Timestamp   time.Time
@@ -180,8 +181,8 @@ func splitDefault(b LogEventBatch) []RSysLogMessage {
 	for _, event := range b.LogEvents {
 		out = append(out, RSysLogMessage{
 			Timestamp:   event.Timestamp.Time(),
-			Hostname:    "unknown",
-			ProgramName: "unknown",
+			Hostname:    b.LogStream,
+			ProgramName: b.LogGroup + "--" + b.LogStream + arnCruft + taskCruft,
 			PID:         1,
 			Message:     event.Message,
 		})

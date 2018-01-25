@@ -153,3 +153,25 @@ func TestSplitLambda(t *testing.T) {
 	}
 	assert.Equal(t, expected, lines)
 }
+
+func TestSplitDefault(t *testing.T) {
+	input := LogEventBatch{
+		MessageType:         "DATA_MESSAGE",
+		Owner:               "123456789012",
+		LogGroup:            "vpn_flow_logs",
+		LogStream:           "eni-43403819-all",
+		SubscriptionFilters: []string{"SomeSubscription"},
+		LogEvents: []LogEvent{
+			{
+				ID:        "99999992379011144044923130086453437181614530551221780480",
+				Timestamp: NewUnixTimestampMillis(1498519943285),
+				Message:   "2 589690932525 eni-43403819 10.0.0.233 172.217.6.46 64067 443 17 8 3969 1516891809 1516891868 ACCEPT OK",
+			},
+		},
+	}
+	lines := Split(input)
+	expected := [][]byte{
+		[]byte(`2017-06-26T23:32:23.285001+00:00 eni-43403819-all vpn_flow_logs--eni-43403819-all/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: 2 589690932525 eni-43403819 10.0.0.233 172.217.6.46 64067 443 17 8 3969 1516891809 1516891868 ACCEPT OK`),
+	}
+	assert.Equal(t, expected, lines)
+}
