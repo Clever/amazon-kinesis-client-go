@@ -3,12 +3,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/Clever/amazon-kinesis-client-go"
-  packages = ["batchconsumer","batchconsumer/stats","kcl","splitter"]
-  revision = "ebf2e2dc98e47f99f3804851df4d53785554fe99"
-
-[[projects]]
-  branch = "master"
   name = "github.com/Clever/syslogparser"
   packages = [".","rfc3164"]
   revision = "fb28ad3e4340c046323b7beba685a72fd12ecbe8"
@@ -75,6 +69,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "247dee07cda8454b26ac77236ab66b3a0d726aa8bd8d428a4123ada0c72e56d0"
+  inputs-digest = "12add425987f6b506139be39923e5dababe3a0337b5d8f81bf5722c55c58b52e"
   solver-name = "gps-cdcl"
   solver-version = 1
