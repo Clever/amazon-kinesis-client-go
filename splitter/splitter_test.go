@@ -144,12 +144,18 @@ func TestSplitLambda(t *testing.T) {
 				Timestamp: NewUnixTimestampMillis(1498519943285),
 				Message:   `{"aws_request_id":"8edbd53f-64c7-4a3c-bf1e-efeff40f6512","level":"info","source":"app","title":"some-log-title"}`,
 			},
+			{
+				ID:        "99999992387663833181953011865369295871402094815542181889",
+				Timestamp: NewUnixTimestampMillis(1498519943285),
+				Message:   `Example message that doesn't contain a request ID`,
+			},
 		},
 	}
 	lines := Split(input)
 	expected := [][]byte{
 		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F8edbd53f-64c7-4a3c-bf1e-efeff40f6512[1]: START RequestId: 8edbd53f-64c7-4a3c-bf1e-efeff40f6512 Version: 3`),
 		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F8edbd53f-64c7-4a3c-bf1e-efeff40f6512[1]: {"aws_request_id":"8edbd53f-64c7-4a3c-bf1e-efeff40f6512","level":"info","source":"app","title":"some-log-title"}`),
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: Example message that doesn't contain a request ID`),
 	}
 	assert.Equal(t, expected, lines)
 }
