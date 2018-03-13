@@ -164,6 +164,8 @@ func splitAWSLambda(b LogEventBatch) ([]RSysLogMessage, bool) {
 		var task string
 		if matches := awsLambdaRequestIDRegex.FindAllString(event.Message, 1); len(matches) == 1 {
 			task = matches[0]
+		} else {
+			task = taskCruft // rsyslog message must contain a non-empty task ID to satisfy later parsing
 		}
 		out = append(out, RSysLogMessage{
 			Timestamp:   event.Timestamp.Time(),
