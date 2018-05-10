@@ -66,6 +66,19 @@ func TestKayveeDecoding(t *testing.T) {
 			ExpectedError: nil,
 		},
 		Spec{
+			Title: "Reserved fields are respected",
+			Input: `prefix {"a":"b","prefix":"no-override","postfix":"no-override",` +
+				`"decoder_msg_type":"no-override","timestamp":"no-override",` +
+				`"hostname":"no-override","rawlog":"no-override"} postfix`,
+			ExpectedOutput: map[string]interface{}{
+				"prefix":           "prefix ",
+				"postfix":          " postfix",
+				"a":                "b",
+				"decoder_msg_type": "Kayvee",
+			},
+			ExpectedError: nil,
+		},
+		Spec{
 			Title:          "Returns NonKayveeError if not JSON in body",
 			Input:          `prefix { postfix`,
 			ExpectedOutput: map[string]interface{}{},

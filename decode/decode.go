@@ -15,6 +15,9 @@ var reservedFields = []string{
 	"prefix",
 	"postfix",
 	"decoder_msg_type",
+	"timestamp",
+	"hostname",
+	"rawlog",
 }
 
 func stringInSlice(s string, slice []string) bool {
