@@ -57,6 +57,9 @@ func FieldsFromSyslog(line string) (map[string]interface{}, error) {
 			out[newKey] = v
 		}
 	}
+
+	out["decoder_msg_type"] = "syslog"
+
 	return out, nil
 }
 
