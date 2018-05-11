@@ -15,6 +15,9 @@ var reservedFields = []string{
 	"prefix",
 	"postfix",
 	"decoder_msg_type",
+	"timestamp",
+	"hostname",
+	"rawlog",
 }
 
 func stringInSlice(s string, slice []string) bool {
@@ -57,6 +60,9 @@ func FieldsFromSyslog(line string) (map[string]interface{}, error) {
 			out[newKey] = v
 		}
 	}
+
+	out["decoder_msg_type"] = "syslog"
+
 	return out, nil
 }
 
