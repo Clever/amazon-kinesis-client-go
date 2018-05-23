@@ -5,7 +5,7 @@ SHELL := /bin/bash
 PKG := github.com/Clever/amazon-kinesis-client-go
 PKGS := $(shell go list ./... | grep -v /vendor )
 .PHONY: download_jars run build
-$(eval $(call golang-version-check,1.9))
+$(eval $(call golang-version-check,1.10))
 
 CONSUMER ?= consumer
 TMP_DIR := ./tmp-jars
