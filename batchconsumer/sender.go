@@ -11,6 +11,8 @@ var ErrMessageIgnored = errors.New("Message intentionally skipped by sender")
 
 // Sender an interface needed for batch consumer implementations
 type Sender interface {
+	// Initialize called once before ProcessMessage and SendBatch
+	Initialize(shardID string)
 	// ProcessMessage receives a raw message and is expected to return an appropriately formatted
 	// message as well as a list of tags for that log line.  A tag corresponds to a batch that
 	// it'll be put into.  Typically tags are series names.
