@@ -49,6 +49,8 @@ func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer
 		BatchInterval: b.config.BatchInterval,
 	}
 
+	b.sender.Initialize(shardID)
+
 	b.chkpntManager = newCheckpointManager(checkpointer, b.config.CheckpointFreq)
 	b.batcherManager = newBatcherManager(b.sender, b.chkpntManager, bmConfig, b.failedLogsFile)
 

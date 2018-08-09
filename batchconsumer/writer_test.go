@@ -14,6 +14,8 @@ import (
 
 type ignoringSender struct{}
 
+func (i ignoringSender) Initialize(shardID string) {}
+
 func (i ignoringSender) ProcessMessage(rawmsg []byte) (msg []byte, tags []string, err error) {
 	return nil, nil, ErrMessageIgnored
 }
@@ -27,6 +29,7 @@ type tagBatch struct {
 	batch [][]byte
 }
 type msgAsTagSender struct {
+	shardID   string
 	batches   map[string][][][]byte
 	saveBatch chan tagBatch
 	shutdown  chan struct{}
@@ -59,6 +62,10 @@ func (i *msgAsTagSender) startBatchSaver(saveBatch <-chan tagBatch, shutdown <-c
 			}
 		}
 	}()
+}
+
+func (i *msgAsTagSender) Initialize(shardID string) {
+	i.shardID = shardID
 }
 
 func (i *msgAsTagSender) ProcessMessage(rawmsg []byte) (msg []byte, tags []string, err error) {
@@ -175,6 +182,8 @@ func TestProcessRecordsSingleBatchBasic(t *testing.T) {
 
 	wrt := NewBatchedWriter(mockconfig, mocksender, mockFailedLogsFile)
 	wrt.Initialize("test-shard", mockcheckpointer)
+
+	assert.Equal("test-shard", mocksender.shardID)
 
 	err := wrt.ProcessRecords([]kcl.Record{
 		kcl.Record{SequenceNumber: "1", Data: encode("tag1")},

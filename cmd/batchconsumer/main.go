@@ -23,7 +23,12 @@ func main() {
 }
 
 type exampleSender struct {
-	output logger.KayveeLogger
+	shardID string
+	output  logger.KayveeLogger
+}
+
+func (e *exampleSender) Initialize(shardID string) {
+	e.shardID = shardID
 }
 
 func (e *exampleSender) ProcessMessage(rawmsg []byte) ([]byte, []string, error) {
