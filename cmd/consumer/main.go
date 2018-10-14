@@ -62,11 +62,6 @@ func (srp *sampleRecordProcessor) Shutdown(reason string) error {
 }
 
 func main() {
-	f, err := os.Create("/tmp/kcl_stderr")
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
 	kclProcess := kcl.New(os.Stdin, os.Stdout, os.Stderr, newSampleRecordProcessor())
 	kclProcess.Run()
 }
