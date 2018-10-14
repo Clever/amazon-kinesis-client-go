@@ -51,6 +51,12 @@ func (srp *sampleRecordProcessor) ProcessRecords(records []kcl.Record) error {
 	return nil
 }
 
+func (srp *sampleRecordProcessor) ShutdownRequested() error {
+	fmt.Fprintf(os.Stderr, "Got shutdown requested, attempt to checkpoint.\n")
+	srp.checkpointer.Shutdown()
+	return nil
+}
+
 func (srp *sampleRecordProcessor) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
 		fmt.Fprintf(os.Stderr, "Was told to terminate, will attempt to checkpoint.\n")
