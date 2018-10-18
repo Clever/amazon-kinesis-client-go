@@ -12,7 +12,6 @@ import (
 type RecordProcessor interface {
 	Initialize(shardID string, checkpointer Checkpointer) error
 	ProcessRecords(records []Record) error
-	ShutdownRequested() error
 	// Shutdown this call should block until it's safe to shutdown the process
 	Shutdown(reason string) error
 }
@@ -237,12 +236,12 @@ func (kclp *KCLProcess) handleLine(line string) (string, error) {
 	case ActionShutdown:
 		kclp.ioHandler.writeError("Received shutdown action...")
 
+		reason := action.Reason
 		// Shutdown should block until it's safe to shutdown the process
 		if action.Action == "shutdownRequested" {
-			err = kclp.recordProcessor.ShutdownRequested()
-		} else {
-			err = kclp.recordProcessor.Shutdown(action.Reason)
+			reason = "SHUTDOWN_REQUESTED"
 		}
+		err = kclp.recordProcessor.Shutdown(reason)
 
 		if err != nil { // Log error and continue shutting down
 			kclp.ioHandler.writeError(fmt.Sprintf("ERR shutdown: %+#v", err))
