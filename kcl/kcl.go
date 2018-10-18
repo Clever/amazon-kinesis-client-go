@@ -59,11 +59,13 @@ type ActionInitialize struct {
 }
 
 type Record struct {
-	SequenceNumber              string `json:"sequenceNumber"`
-	SubSequenceNumber           int    `json:"subSequenceNumber"`
-	ApproximateArrivalTimestamp int    `json:"approximateArrivalTimestamp"`
-	PartitionKey                string `json:"partitionKey"`
-	Data                        string `json:"data"`
+	SequenceNumber    string `json:"sequenceNumber"`
+	SubSequenceNumber int    `json:"subSequenceNumber"`
+	PartitionKey      string `json:"partitionKey"`
+	Data              string `json:"data"`
+	// KCL v2 has a different format, causing failure when json.Unmarshal.
+	// This is not used anywhere currently, so commenting it out.
+	//ApproximateArrivalTimestamp int    `json:"approximateArrivalTimestamp"`
 }
 
 type ActionProcessRecords struct {
