@@ -100,7 +100,7 @@ func (b *batcherManager) sendBatch(batcher *batcher, tag string) {
 	case PartialSendBatchError:
 		lg.ErrorD("send-batch", kv.M{"msg": e.Error()})
 		for _, line := range e.FailedMessages {
-			b.failedLogsFile.ErrorD("failed-log", kv.M{"log": line})
+			b.failedLogsFile.ErrorD("failed-log", kv.M{"log": line, "msg": e.Error()})
 		}
 		stats.Counter("batch-log-failures", len(e.FailedMessages))
 	case CatastrophicSendBatchError:
