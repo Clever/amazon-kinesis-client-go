@@ -55,6 +55,9 @@ func (srp *sampleRecordProcessor) Shutdown(reason string) error {
 	if reason == "TERMINATE" {
 		fmt.Fprintf(os.Stderr, "Was told to terminate, will attempt to checkpoint.\n")
 		srp.checkpointer.Shutdown()
+	} else if reason == "SHUTDOWN_REQUESTED" {
+		fmt.Fprintf(os.Stderr, "Got shutdown requested, attempt to checkpoint.\n")
+		srp.checkpointer.Shutdown()
 	} else {
 		fmt.Fprintf(os.Stderr, "Shutting down due to failover. Will not checkpoint.\n")
 	}
@@ -62,11 +65,6 @@ func (srp *sampleRecordProcessor) Shutdown(reason string) error {
 }
 
 func main() {
-	f, err := os.Create("/tmp/kcl_stderr")
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
 	kclProcess := kcl.New(os.Stdin, os.Stdout, os.Stderr, newSampleRecordProcessor())
 	kclProcess.Run()
 }
