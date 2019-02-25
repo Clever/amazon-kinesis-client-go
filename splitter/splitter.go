@@ -108,6 +108,11 @@ var awsBatchTaskRegex = regexp.MustCompile(awsBatchTaskMeta)
 var awsLambdaLogGroupRegex = regexp.MustCompile(`^/aws/lambda/([a-z0-9-]+)--([a-z0-9-]+)$`)
 var awsLambdaRequestIDRegex = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
+// fargate log groups are of the form /ecs/<env>--<app>
+// fargate log streams are of the form fargate/<container name>/<ecs task id>
+var awsFargateLogGroupRegex = regexp.MustCompile(`^/ecs/([a-z0-9-]+)--([a-z0-9-]+)$`)
+var awsFargateLogStreamRegex = regexp.MustCompile(`^fargate/([a-z0-9-]+)--([a-z0-9-]+)/([a-z0-9]+)$`)
+
 // arn and task cruft to satisfy parsing later on: https://github.com/Clever/amazon-kinesis-client-go/blob/94aacdf8339bd2cc8400d3bcb323dc1bce2c8422/decode/decode.go#L421-L425
 const arnCruft = `/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F`
 const taskCruft = `12345678-1234-1234-1234-555566667777`
@@ -178,6 +183,33 @@ func splitAWSLambda(b LogEventBatch) ([]RSysLogMessage, bool) {
 	return out, true
 }
 
+func splitAWSFargate(b LogEventBatch) ([]RSysLogMessage, bool) {
+	matches := awsFargateLogGroupRegex.FindAllStringSubmatch(b.LogGroup, 1)
+	if len(matches) != 1 {
+		return nil, false
+	}
+	env := matches[0][1]
+	app := matches[0][2]
+
+	streamMatches := awsFargateLogStreamRegex.FindAllStringSubmatch(b.LogStream, 1)
+	if len(streamMatches) != 1 {
+		return nil, false
+	}
+	ecsTaskID := streamMatches[0][3]
+
+	out := []RSysLogMessage{}
+	for _, event := range b.LogEvents {
+		out = append(out, RSysLogMessage{
+			Timestamp:   event.Timestamp.Time(),
+			ProgramName: env + "--" + app + arnCruft + ecsTaskID,
+			PID:         1,
+			Hostname:    "aws-fargate",
+			Message:     event.Message,
+		})
+	}
+	return out, true
+}
+
 func splitDefault(b LogEventBatch) []RSysLogMessage {
 	out := []RSysLogMessage{}
 	for _, event := range b.LogEvents {
@@ -199,9 +231,11 @@ func Split(b LogEventBatch) [][]byte {
 	var rsyslogMsgs []RSysLogMessage
 	var ok bool
 	if rsyslogMsgs, ok = splitAWSLambda(b); !ok {
-		rsyslogMsgs, ok = splitAWSBatch(b)
-		if !ok {
-			rsyslogMsgs = splitDefault(b)
+		if rsyslogMsgs, ok = splitAWSFargate(b); !ok {
+			rsyslogMsgs, ok = splitAWSBatch(b)
+			if !ok {
+				rsyslogMsgs = splitDefault(b)
+			}
 		}
 	}
 

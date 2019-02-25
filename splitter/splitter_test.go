@@ -160,6 +160,28 @@ func TestSplitLambda(t *testing.T) {
 	assert.Equal(t, expected, lines)
 }
 
+func TestSplitFargate(t *testing.T) {
+	input := LogEventBatch{
+		MessageType:         "DATA_MESSAGE",
+		Owner:               "123456789012",
+		LogGroup:            "/ecs/production--clever-com-router",
+		LogStream:           "fargate/clever-dev--clever-com-router/27b22d5d68aa4bd3923c95e7f32a3852",
+		SubscriptionFilters: []string{"ForwardLogsToKinesis"},
+		LogEvents: []LogEvent{
+			{
+				ID:        "99999992379011144044923130086453437181614530551221780480",
+				Timestamp: NewUnixTimestampMillis(1498519943285),
+				Message:   "Starting haproxy: haproxy.",
+			},
+		},
+	}
+	lines := Split(input)
+	expected := [][]byte{
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-fargate production--clever-com-router/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F27b22d5d68aa4bd3923c95e7f32a3852[1]: Starting haproxy: haproxy.`),
+	}
+	assert.Equal(t, expected, lines)
+}
+
 func TestSplitDefault(t *testing.T) {
 	input := LogEventBatch{
 		MessageType:         "DATA_MESSAGE",
