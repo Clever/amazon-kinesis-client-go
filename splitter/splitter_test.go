@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Clever/amazon-kinesis-client-go/decode"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUnpacking(t *testing.T) {
@@ -158,6 +160,17 @@ func TestSplitLambda(t *testing.T) {
 		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: Example message that doesn't contain a request ID`),
 	}
 	assert.Equal(t, expected, lines)
+	for i, line := range expected {
+		enhanced, err := decode.ParseAndEnhance(string(line), "")
+		require.Nil(t, err)
+		assert.Equal(t, "aws-lambda", enhanced["hostname"])
+		assert.Equal(t, "env", enhanced["container_env"])
+		assert.Equal(t, "app", enhanced["container_app"])
+		if i != len(expected)-1 /* last line doesn't have a request ID */ {
+			assert.Equal(t, "8edbd53f-64c7-4a3c-bf1e-efeff40f6512", enhanced["container_task"])
+		}
+	}
+
 }
 
 func TestSplitFargate(t *testing.T) {
@@ -180,6 +193,14 @@ func TestSplitFargate(t *testing.T) {
 		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-fargate production--clever-com-router/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F27b22d5d68aa4bd3923c95e7f32a3852[1]: Starting haproxy: haproxy.`),
 	}
 	assert.Equal(t, expected, lines)
+	for _, line := range expected {
+		enhanced, err := decode.ParseAndEnhance(string(line), "")
+		require.Nil(t, err)
+		assert.Equal(t, "aws-fargate", enhanced["hostname"])
+		assert.Equal(t, "production", enhanced["container_env"])
+		assert.Equal(t, "clever-com-router", enhanced["container_app"])
+		assert.Equal(t, "27b22d5d68aa4bd3923c95e7f32a3852", enhanced["container_task"])
+	}
 }
 
 func TestSplitDefault(t *testing.T) {
