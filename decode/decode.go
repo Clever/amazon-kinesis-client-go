@@ -426,7 +426,7 @@ func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
 
 const containerMeta = `([a-z0-9-]+)--([a-z0-9-]+)\/` + // env--app
 	`arn%3Aaws%3Aecs%3Aus-(west|east)-[1-2]%3A[0-9]{12}%3Atask%2F` + // ARN cruft
-	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})` // task-id
+	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9]{32})` // task-id (ECS, both EC2 and Fargate)
 
 var containerMetaRegex = regexp.MustCompile(containerMeta)
 
