@@ -243,6 +243,7 @@ func TestParseAndEnhance(t *testing.T) {
 				"env":              "deploy-env",
 				"container_env":    "env",
 				"container_app":    "app",
+				"container_region": "us-west-1",
 				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
 			},
 			ExpectedError: nil,
@@ -262,6 +263,7 @@ func TestParseAndEnhance(t *testing.T) {
 				"env":              "deploy-env",
 				"container_env":    "env",
 				"container_app":    "force-app",
+				"container_region": "us-west-1",
 				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
 			},
 			ExpectedError: nil,
@@ -278,6 +280,7 @@ func TestParseAndEnhance(t *testing.T) {
 				"decoder_msg_type": "syslog",
 				"container_env":    "env",
 				"container_app":    "app",
+				"container_region": "us-west-1",
 				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
 			},
 			ExpectedError: nil,
@@ -303,6 +306,7 @@ func TestParseAndEnhance(t *testing.T) {
 				"env":              "deploy-env",
 				"container_env":    "env",
 				"container_app":    "app",
+				"container_region": "us-west-1",
 				"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
 				"nested":           map[string]interface{}{"a": "b"},
 			},
@@ -341,57 +345,73 @@ func TestGetContainerMeta(t *testing.T) {
 
 	t.Log("Must have a programname to get container meta")
 	programname := ""
-	_, err := getContainerMeta(programname, "", "", "")
+	_, err := getContainerMeta(programname, "", "", "", "")
 	assert.Error(err)
 
 	t.Log("Can parse a programname")
 	programname = `env1--app2/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`
-	meta, err := getContainerMeta(programname, "", "", "")
+	meta, err := getContainerMeta(programname, "", "", "", "")
 	assert.NoError(err)
 	assert.Equal(map[string]string{
-		"container_env":  "env1",
-		"container_app":  "app2",
-		"container_task": "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
+		"container_env":    "env1",
+		"container_app":    "app2",
+		"container_region": "us-west-1",
+		"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
 	}, meta)
 
 	t.Log("Can override just 'env'")
 	overrideEnv := "force-env"
-	meta, err = getContainerMeta(programname, overrideEnv, "", "")
+	meta, err = getContainerMeta(programname, overrideEnv, "", "", "")
 	assert.NoError(err)
 	assert.Equal(map[string]string{
-		"container_env":  overrideEnv,
-		"container_app":  "app2",
-		"container_task": "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
+		"container_env":    overrideEnv,
+		"container_app":    "app2",
+		"container_region": "us-west-1",
+		"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
 	}, meta)
 
 	t.Log("Can override just 'app'")
 	overrideApp := "force-app"
-	meta, err = getContainerMeta(programname, "", overrideApp, "")
+	meta, err = getContainerMeta(programname, "", overrideApp, "", "")
 	assert.NoError(err)
 	assert.Equal(map[string]string{
-		"container_env":  "env1",
-		"container_app":  overrideApp,
-		"container_task": "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
+		"container_env":    "env1",
+		"container_app":    overrideApp,
+		"container_region": "us-west-1",
+		"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
+	}, meta)
+
+	t.Log("Can override just 'region'")
+	overrideRegion := "force-region"
+	meta, err = getContainerMeta(programname, "", "", overrideRegion, "")
+	assert.NoError(err)
+	assert.Equal(map[string]string{
+		"container_env":    "env1",
+		"container_app":    "app2",
+		"container_region": overrideRegion,
+		"container_task":   "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
 	}, meta)
 
 	t.Log("Can override just 'task'")
 	overrideTask := "force-task"
-	meta, err = getContainerMeta(programname, "", "", overrideTask)
+	meta, err = getContainerMeta(programname, "", "", "", overrideTask)
 	assert.NoError(err)
 	assert.Equal(map[string]string{
-		"container_env":  "env1",
-		"container_app":  "app2",
-		"container_task": overrideTask,
+		"container_env":    "env1",
+		"container_app":    "app2",
+		"container_region": "us-west-1",
+		"container_task":   overrideTask,
 	}, meta)
 
 	t.Log("Can override all fields")
 	programname = `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`
-	meta, err = getContainerMeta(programname, overrideEnv, overrideApp, overrideTask)
+	meta, err = getContainerMeta(programname, overrideEnv, overrideApp, overrideRegion, overrideTask)
 	assert.NoError(err)
 	assert.Equal(map[string]string{
-		"container_env":  overrideEnv,
-		"container_app":  overrideApp,
-		"container_task": overrideTask,
+		"container_env":    overrideEnv,
+		"container_app":    overrideApp,
+		"container_region": overrideRegion,
+		"container_task":   overrideTask,
 	}, meta)
 }
 

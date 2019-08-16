@@ -404,6 +404,7 @@ func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
 	// docker-events app.
 	forceEnv := ""
 	forceApp := ""
+	forceRegion := ""
 	forceTask := ""
 	if cEnv, ok := out["container_env"]; ok {
 		forceEnv = cEnv.(string)
@@ -411,10 +412,13 @@ func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
 	if cApp, ok := out["container_app"]; ok {
 		forceApp = cApp.(string)
 	}
+	if cRegion, ok := out["container_region"]; ok {
+		forceRegion = cRegion.(string)
+	}
 	if cTask, ok := out["container_task"]; ok {
 		forceTask = cTask.(string)
 	}
-	meta, err := getContainerMeta(programname, forceEnv, forceApp, forceTask)
+	meta, err := getContainerMeta(programname, forceEnv, forceApp, forceRegion, forceTask)
 	if err == nil {
 		for k, v := range meta {
 			out[k] = v
@@ -425,24 +429,26 @@ func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
 }
 
 const containerMeta = `([a-z0-9-]+)--([a-z0-9-]+)\/` + // env--app
-	`arn%3Aaws%3Aecs%3Aus-(west|east)-[1-2]%3A[0-9]{12}%3Atask%2F` + // ARN cruft
+	`arn%3Aaws%3Aecs%3A(us-(west|east)-[1-2])%3A[0-9]{12}%3Atask%2F` + // ARN cruft
 	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9]{32})` // task-id (ECS, both EC2 and Fargate)
 
 var containerMetaRegex = regexp.MustCompile(containerMeta)
 
-func getContainerMeta(programname, forceEnv, forceApp, forceTask string) (map[string]string, error) {
+func getContainerMeta(programname, forceEnv, forceApp, forceRegion, forceTask string) (map[string]string, error) {
 	if programname == "" {
 		return map[string]string{}, fmt.Errorf("no programname")
 	}
 
 	env := ""
 	app := ""
+	region := ""
 	task := ""
 	matches := containerMetaRegex.FindAllStringSubmatch(programname, 1)
 	if len(matches) == 1 {
 		env = matches[0][1]
 		app = matches[0][2]
-		task = matches[0][4]
+		region = matches[0][3]
+		task = matches[0][5]
 	}
 
 	if forceEnv != "" {
@@ -451,17 +457,21 @@ func getContainerMeta(programname, forceEnv, forceApp, forceTask string) (map[st
 	if forceApp != "" {
 		app = forceApp
 	}
+	if forceRegion != "" {
+		region = forceRegion
+	}
 	if forceTask != "" {
 		task = forceTask
 	}
 
-	if env == "" || app == "" || task == "" {
+	if env == "" || app == "" || region == "" || task == "" {
 		return map[string]string{}, fmt.Errorf("unable to get one or more of env/app/task")
 	}
 
 	return map[string]string{
-		"container_env":  env,
-		"container_app":  app,
-		"container_task": task,
+		"container_env":    env,
+		"container_app":    app,
+		"container_region": region,
+		"container_task":   task,
 	}, nil
 }
