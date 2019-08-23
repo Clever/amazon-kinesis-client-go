@@ -224,3 +224,32 @@ func TestSplitDefault(t *testing.T) {
 	}
 	assert.Equal(t, expected, lines)
 }
+
+func TestSplitRDS(t *testing.T) {
+	input := LogEventBatch{
+		MessageType:         "DATA_MESSAGE",
+		Owner:               "123456789012",
+		LogGroup:            "/aws/rds/cluster/production-aurora-test-db/slowquery",
+		LogStream:           "clever-dev-aurora-test-db",
+		SubscriptionFilters: []string{"ForwardLogsToKinesis"},
+		LogEvents: []LogEvent{
+			{
+				ID:        "99999992379011144044923130086453437181614530551221780480",
+				Timestamp: NewUnixTimestampMillis(1498519943285),
+				Message:   "Slow query: select * from table.",
+			},
+		},
+	}
+	lines := Split(input)
+	expected := [][]byte{
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-rds production-aurora-test-db[1]: Slow query: select * from table.`),
+	}
+	assert.Equal(t, expected, lines)
+	for _, line := range expected {
+		enhanced, err := decode.ParseAndEnhance(string(line), "")
+		require.Nil(t, err)
+		assert.Equal(t, "aws-rds", enhanced["hostname"])
+		assert.Equal(t, "production-aurora-test-db", enhanced["programname"])
+		assert.Equal(t, "Slow query: select * from table.", enhanced["rawlog"])
+	}
+}
