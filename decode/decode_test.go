@@ -197,6 +197,18 @@ func TestSyslogDecoding(t *testing.T) {
 			ExpectedError: nil,
 		},
 		Spec{
+			Title: "Parses Rsyslog_ FileFormat with simple log body for slowquery",
+			Input: `2017-06-26T23:32:23.285001+00:00 aws-rds production-aurora-test-db: Slow query: select * from table.`,
+			ExpectedOutput: map[string]interface{}{
+				"timestamp":        logTime,
+				"hostname":         "aws-rds",
+				"programname":      "production-aurora-test-db",
+				"rawlog":           "Slow query: select * from table.",
+				"decoder_msg_type": "syslog",
+			},
+			ExpectedError: nil,
+		},
+		Spec{
 			Title:          "Fails to parse non-RSyslog log line",
 			Input:          `not rsyslog`,
 			ExpectedOutput: map[string]interface{}{},
