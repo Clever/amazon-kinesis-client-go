@@ -185,6 +185,18 @@ func TestSyslogDecoding(t *testing.T) {
 			ExpectedError: nil,
 		},
 		Spec{
+			Title: "Parses Rsyslog_ FileFormat without PID",
+			Input: `2017-04-05T21:57:46.794862+00:00 ip-10-0-0-0 env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef: 2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished"}`,
+			ExpectedOutput: map[string]interface{}{
+				"timestamp":        logTime3,
+				"hostname":         "ip-10-0-0-0",
+				"programname":      `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
+				"rawlog":           `2017/04/05 21:57:46 some_file.go:10: {"title":"request_finished"}`,
+				"decoder_msg_type": "syslog",
+			},
+			ExpectedError: nil,
+		},
+		Spec{
 			Title:          "Fails to parse non-RSyslog log line",
 			Input:          `not rsyslog`,
 			ExpectedOutput: map[string]interface{}{},
