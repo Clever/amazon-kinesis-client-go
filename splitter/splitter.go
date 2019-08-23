@@ -135,10 +135,10 @@ func (r RSysLogMessage) String() string {
 		r.Hostname, r.ProgramName, r.Message)
 }
 
-func splitAWSBatch(b LogEventBatch) []RSysLogMessage {
+func splitAWSBatch(b LogEventBatch) ([]RSysLogMessage, bool) {
 	matches := awsBatchTaskRegex.FindAllStringSubmatch(b.LogStream, 1)
 	if len(matches) != 1 {
-		return nil
+		return nil, false
 	}
 	env := matches[0][1]
 	app := matches[0][2]
@@ -153,13 +153,13 @@ func splitAWSBatch(b LogEventBatch) []RSysLogMessage {
 			Message:     event.Message,
 		})
 	}
-	return out
+	return out, true
 }
 
-func splitAWSLambda(b LogEventBatch) []RSysLogMessage {
+func splitAWSLambda(b LogEventBatch) ([]RSysLogMessage, bool) {
 	matches := awsLambdaLogGroupRegex.FindAllStringSubmatch(b.LogGroup, 1)
 	if len(matches) != 1 {
-		return nil
+		return nil, false
 	}
 	env := matches[0][1]
 	app := matches[0][2]
@@ -180,20 +180,20 @@ func splitAWSLambda(b LogEventBatch) []RSysLogMessage {
 			Message:     event.Message,
 		})
 	}
-	return out
+	return out, true
 }
 
-func splitAWSFargate(b LogEventBatch) []RSysLogMessage {
+func splitAWSFargate(b LogEventBatch) ([]RSysLogMessage, bool) {
 	matches := awsFargateLogGroupRegex.FindAllStringSubmatch(b.LogGroup, 1)
 	if len(matches) != 1 {
-		return nil
+		return nil, false
 	}
 	env := matches[0][1]
 	app := matches[0][2]
 
 	streamMatches := awsFargateLogStreamRegex.FindAllStringSubmatch(b.LogStream, 1)
 	if len(streamMatches) != 1 {
-		return nil
+		return nil, false
 	}
 	ecsTaskID := streamMatches[0][3]
 
@@ -206,13 +206,13 @@ func splitAWSFargate(b LogEventBatch) []RSysLogMessage {
 			Message:     event.Message,
 		})
 	}
-	return out
+	return out, true
 }
 
-func splitAWSRDS(b LogEventBatch) []RSysLogMessage {
+func splitAWSRDS(b LogEventBatch) ([]RSysLogMessage, bool) {
 	matches := awsRDSLogGroupRegex.FindAllStringSubmatch(b.LogGroup, 1)
 	if len(matches) != 1 {
-		return nil
+		return nil, false
 	}
 	databaseName := matches[0][1]
 
@@ -226,7 +226,7 @@ func splitAWSRDS(b LogEventBatch) []RSysLogMessage {
 			Message:     event.Message,
 		})
 	}
-	return out
+	return out, true
 }
 
 func splitDefault(b LogEventBatch) []RSysLogMessage {
@@ -242,28 +242,26 @@ func splitDefault(b LogEventBatch) []RSysLogMessage {
 	return out
 }
 
+func stringify(rsyslogs []RSysLogMessage) [][]byte {
+	out := make([][]byte, len(rsyslogs))
+	for i := range rsyslogs {
+		out[i] = []byte(rsyslogs[i].String())
+	}
+	return out
+}
+
 // Split takes a LogEventBatch and separates into a slice of enriched log lines
 // Lines are enhanced by adding an Rsyslog prefix, which should be handled correctly by
 // the subsequent decoding logic.
 func Split(b LogEventBatch) [][]byte {
-	var rsyslogMsgs []RSysLogMessage
-
-	if awsLambdaLogGroupRegex.MatchString(b.LogGroup) {
-		rsyslogMsgs = splitAWSLambda(b)
-	} else if awsFargateLogGroupRegex.MatchString(b.LogGroup) {
-		rsyslogMsgs = splitAWSFargate(b)
-	} else if awsBatchTaskRegex.MatchString(b.LogStream) {
-		rsyslogMsgs = splitAWSBatch(b)
-	} else if awsRDSLogGroupRegex.MatchString(b.LogGroup) {
-		rsyslogMsgs = splitAWSRDS(b)
-	} else {
-		rsyslogMsgs = splitDefault(b)
+	if rsyslogMsgs, ok := splitAWSLambda(b); ok {
+		return stringify(rsyslogMsgs)
+	} else if rsyslogMsgs, ok := splitAWSFargate(b); ok {
+		return stringify(rsyslogMsgs)
+	} else if rsyslogMsgs, ok := splitAWSBatch(b); ok {
+		return stringify(rsyslogMsgs)
+	} else if rsyslogMsgs, ok := splitAWSRDS(b); ok {
+		return stringify(rsyslogMsgs)
 	}
-
-	out := [][]byte{}
-	for _, rsyslogMsg := range rsyslogMsgs {
-		out = append(out, []byte(rsyslogMsg.String()))
-	}
-
-	return out
+	return stringify(splitDefault(b))
 }

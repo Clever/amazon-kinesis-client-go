@@ -198,9 +198,9 @@ func TestSyslogDecoding(t *testing.T) {
 		},
 		Spec{
 			Title: "Parses Rsyslog_ FileFormat with simple log body for slowquery",
-			Input: `2017-06-26T23:32:23.285001+00:00 aws-rds production-aurora-test-db: Slow query: select * from table.`,
+			Input: `2017-04-05T21:57:46.794862+00:00 aws-rds production-aurora-test-db: Slow query: select * from table.`,
 			ExpectedOutput: map[string]interface{}{
-				"timestamp":        logTime,
+				"timestamp":        logTime3,
 				"hostname":         "aws-rds",
 				"programname":      "production-aurora-test-db",
 				"rawlog":           "Slow query: select * from table.",
