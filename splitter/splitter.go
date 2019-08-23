@@ -137,6 +137,9 @@ func (r RSysLogMessage) String() string {
 
 func splitAWSBatch(b LogEventBatch) []RSysLogMessage {
 	matches := awsBatchTaskRegex.FindAllStringSubmatch(b.LogStream, 1)
+	if len(matches) != 1 {
+		return nil
+	}
 	env := matches[0][1]
 	app := matches[0][2]
 	task := matches[0][3]
