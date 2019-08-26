@@ -113,6 +113,9 @@ var awsLambdaRequestIDRegex = regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-
 var awsFargateLogGroupRegex = regexp.MustCompile(`^/ecs/([a-z0-9-]+)--([a-z0-9-]+)$`)
 var awsFargateLogStreamRegex = regexp.MustCompile(`^fargate/([a-z0-9-]+)--([a-z0-9-]+)/([a-z0-9]+)$`)
 
+// RDS slowquery log groups are in the form of /aws/rds/cluster/<database name>/slowquery
+var awsRDSLogGroupRegex = regexp.MustCompile(`^/aws/rds/cluster/([a-z0-9-]+)/slowquery$`)
+
 // arn and task cruft to satisfy parsing later on: https://github.com/Clever/amazon-kinesis-client-go/blob/94aacdf8339bd2cc8400d3bcb323dc1bce2c8422/decode/decode.go#L421-L425
 const arnCruft = `/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F`
 const taskCruft = `12345678-1234-1234-1234-555566667777`
@@ -206,6 +209,25 @@ func splitAWSFargate(b LogEventBatch) ([]RSysLogMessage, bool) {
 	return out, true
 }
 
+func splitAWSRDS(b LogEventBatch) ([]RSysLogMessage, bool) {
+	matches := awsRDSLogGroupRegex.FindAllStringSubmatch(b.LogGroup, 1)
+	if len(matches) != 1 {
+		return nil, false
+	}
+	databaseName := matches[0][1]
+
+	out := []RSysLogMessage{}
+	for _, event := range b.LogEvents {
+		out = append(out, RSysLogMessage{
+			Timestamp:   event.Timestamp.Time(),
+			ProgramName: databaseName,
+			Hostname:    "aws-rds",
+			Message:     event.Message,
+		})
+	}
+	return out, true
+}
+
 func splitDefault(b LogEventBatch) []RSysLogMessage {
 	out := []RSysLogMessage{}
 	for _, event := range b.LogEvents {
@@ -219,25 +241,26 @@ func splitDefault(b LogEventBatch) []RSysLogMessage {
 	return out
 }
 
+func stringify(rsyslogs []RSysLogMessage) [][]byte {
+	out := make([][]byte, len(rsyslogs))
+	for i := range rsyslogs {
+		out[i] = []byte(rsyslogs[i].String())
+	}
+	return out
+}
+
 // Split takes a LogEventBatch and separates into a slice of enriched log lines
 // Lines are enhanced by adding an Rsyslog prefix, which should be handled correctly by
 // the subsequent decoding logic.
 func Split(b LogEventBatch) [][]byte {
-	var rsyslogMsgs []RSysLogMessage
-	var ok bool
-	if rsyslogMsgs, ok = splitAWSLambda(b); !ok {
-		if rsyslogMsgs, ok = splitAWSFargate(b); !ok {
-			rsyslogMsgs, ok = splitAWSBatch(b)
-			if !ok {
-				rsyslogMsgs = splitDefault(b)
-			}
-		}
+	if rsyslogMsgs, ok := splitAWSLambda(b); ok {
+		return stringify(rsyslogMsgs)
+	} else if rsyslogMsgs, ok := splitAWSFargate(b); ok {
+		return stringify(rsyslogMsgs)
+	} else if rsyslogMsgs, ok := splitAWSBatch(b); ok {
+		return stringify(rsyslogMsgs)
+	} else if rsyslogMsgs, ok := splitAWSRDS(b); ok {
+		return stringify(rsyslogMsgs)
 	}
-
-	out := [][]byte{}
-	for _, rsyslogMsg := range rsyslogMsgs {
-		out = append(out, []byte(rsyslogMsg.String()))
-	}
-
-	return out
+	return stringify(splitDefault(b))
 }

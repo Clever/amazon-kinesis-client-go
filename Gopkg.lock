@@ -4,7 +4,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/Clever/syslogparser"
-  packages = [".","rfc3164"]
+  packages = [
+    ".",
+    "rfc3164"
+  ]
   revision = "fb28ad3e4340c046323b7beba685a72fd12ecbe8"
 
 [[projects]]
@@ -25,7 +28,10 @@
 
 [[projects]]
   name = "github.com/stretchr/testify"
-  packages = ["assert"]
+  packages = [
+    "assert",
+    "require"
+  ]
   revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
   version = "v1.1.4"
 
@@ -57,7 +63,11 @@
 
 [[projects]]
   name = "gopkg.in/Clever/kayvee-go.v6"
-  packages = [".","logger","router"]
+  packages = [
+    ".",
+    "logger",
+    "router"
+  ]
   revision = "096364e316a52652d3493be702d8105d8d01db84"
   version = "v6.6.0"
 
@@ -69,6 +79,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "12add425987f6b506139be39923e5dababe3a0337b5d8f81bf5722c55c58b52e"
+  inputs-digest = "4699293f3632dd38561ff60477aa7cc1ecaadc5808b974d017099e2189679286"
   solver-name = "gps-cdcl"
   solver-version = 1
