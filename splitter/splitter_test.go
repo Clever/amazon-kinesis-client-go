@@ -122,8 +122,8 @@ func TestSplitBatch(t *testing.T) {
 	}
 	lines := Split(input)
 	expected := [][]byte{
-		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: some log line"),
-		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: another log line"),
+		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777: some log line"),
+		[]byte("2017-06-26T23:32:23.285001+00:00 aws-batch env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777: another log line"),
 	}
 	assert.Equal(t, expected, lines)
 }
@@ -155,9 +155,9 @@ func TestSplitLambda(t *testing.T) {
 	}
 	lines := Split(input)
 	expected := [][]byte{
-		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F8edbd53f-64c7-4a3c-bf1e-efeff40f6512[1]: START RequestId: 8edbd53f-64c7-4a3c-bf1e-efeff40f6512 Version: 3`),
-		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F8edbd53f-64c7-4a3c-bf1e-efeff40f6512[1]: {"aws_request_id":"8edbd53f-64c7-4a3c-bf1e-efeff40f6512","level":"info","source":"app","title":"some-log-title"}`),
-		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: Example message that doesn't contain a request ID`),
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F8edbd53f-64c7-4a3c-bf1e-efeff40f6512: START RequestId: 8edbd53f-64c7-4a3c-bf1e-efeff40f6512 Version: 3`),
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F8edbd53f-64c7-4a3c-bf1e-efeff40f6512: {"aws_request_id":"8edbd53f-64c7-4a3c-bf1e-efeff40f6512","level":"info","source":"app","title":"some-log-title"}`),
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-lambda env--app/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777: Example message that doesn't contain a request ID`),
 	}
 	assert.Equal(t, expected, lines)
 	for i, line := range expected {
@@ -190,7 +190,7 @@ func TestSplitFargate(t *testing.T) {
 	}
 	lines := Split(input)
 	expected := [][]byte{
-		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-fargate production--clever-com-router/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F27b22d5d68aa4bd3923c95e7f32a3852[1]: Starting haproxy: haproxy.`),
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-fargate production--clever-com-router/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F27b22d5d68aa4bd3923c95e7f32a3852: Starting haproxy: haproxy.`),
 	}
 	assert.Equal(t, expected, lines)
 	for _, line := range expected {
@@ -220,7 +220,7 @@ func TestSplitDefault(t *testing.T) {
 	}
 	lines := Split(input)
 	expected := [][]byte{
-		[]byte(`2017-06-26T23:32:23.285001+00:00 eni-43403819-all vpn_flow_logs--eni-43403819-all/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777[1]: 2 589690932525 eni-43403819 10.0.0.233 172.217.6.46 64067 443 17 8 3969 1516891809 1516891868 ACCEPT OK`),
+		[]byte(`2017-06-26T23:32:23.285001+00:00 eni-43403819-all vpn_flow_logs--eni-43403819-all/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777: 2 589690932525 eni-43403819 10.0.0.233 172.217.6.46 64067 443 17 8 3969 1516891809 1516891868 ACCEPT OK`),
 	}
 	assert.Equal(t, expected, lines)
 }

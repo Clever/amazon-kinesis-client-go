@@ -121,16 +121,15 @@ type RSysLogMessage struct {
 	Timestamp   time.Time
 	Hostname    string
 	ProgramName string
-	PID         int
 	Message     string
 }
 
 func (r RSysLogMessage) String() string {
 	// Adding an extra Microsecond forces `Format` to include all 6 digits within the micorsecond format.
 	// Otherwise, time.Format omits trailing zeroes. (https://github.com/golang/go/issues/12472)
-	return fmt.Sprintf(`%s %s %s[%d]: %s`,
+	return fmt.Sprintf(`%s %s %s: %s`,
 		r.Timestamp.Add(time.Microsecond).Format(RFC3339Micro),
-		r.Hostname, r.ProgramName, r.PID, r.Message)
+		r.Hostname, r.ProgramName, r.Message)
 }
 
 func splitAWSBatch(b LogEventBatch) ([]RSysLogMessage, bool) {
@@ -147,7 +146,6 @@ func splitAWSBatch(b LogEventBatch) ([]RSysLogMessage, bool) {
 		out = append(out, RSysLogMessage{
 			Timestamp:   event.Timestamp.Time(),
 			ProgramName: env + "--" + app + arnCruft + task,
-			PID:         1,
 			Hostname:    "aws-batch",
 			Message:     event.Message,
 		})
@@ -175,7 +173,6 @@ func splitAWSLambda(b LogEventBatch) ([]RSysLogMessage, bool) {
 		out = append(out, RSysLogMessage{
 			Timestamp:   event.Timestamp.Time(),
 			ProgramName: env + "--" + app + arnCruft + task,
-			PID:         1,
 			Hostname:    "aws-lambda",
 			Message:     event.Message,
 		})
@@ -202,7 +199,6 @@ func splitAWSFargate(b LogEventBatch) ([]RSysLogMessage, bool) {
 		out = append(out, RSysLogMessage{
 			Timestamp:   event.Timestamp.Time(),
 			ProgramName: env + "--" + app + arnCruft + ecsTaskID,
-			PID:         1,
 			Hostname:    "aws-fargate",
 			Message:     event.Message,
 		})
@@ -217,7 +213,6 @@ func splitDefault(b LogEventBatch) []RSysLogMessage {
 			Timestamp:   event.Timestamp.Time(),
 			Hostname:    b.LogStream,
 			ProgramName: b.LogGroup + "--" + b.LogStream + arnCruft + taskCruft,
-			PID:         1,
 			Message:     event.Message,
 		})
 	}
