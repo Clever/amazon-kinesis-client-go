@@ -221,7 +221,6 @@ func splitAWSRDS(b LogEventBatch) ([]RSysLogMessage, bool) {
 		out = append(out, RSysLogMessage{
 			Timestamp:   event.Timestamp.Time(),
 			ProgramName: databaseName,
-			PID:         1,
 			Hostname:    "aws-rds",
 			Message:     event.Message,
 		})

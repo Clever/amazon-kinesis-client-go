@@ -242,7 +242,7 @@ func TestSplitRDS(t *testing.T) {
 	}
 	lines := Split(input)
 	expected := [][]byte{
-		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-rds production-aurora-test-db[1]: Slow query: select * from table.`),
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-rds production-aurora-test-db: Slow query: select * from table.`),
 	}
 	assert.Equal(t, expected, lines)
 	for _, line := range expected {
