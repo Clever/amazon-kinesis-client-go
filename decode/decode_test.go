@@ -344,6 +344,23 @@ func TestParseAndEnhance(t *testing.T) {
 				"timestamp":        logTime2,
 			},
 		},
+		ParseAndEnhanceSpec{
+			Title: "RDS Slowquery Log",
+			Line: `2017-04-05T21:57:46+00:00 aws-rds production-aurora-test-db: Slow query: # Time: 190921 16:02:59
+# User@Host: rdsadmin[rdsadmin] @ localhost []  Id:     1
+# Query_time: 22.741550  Lock_time: 0.000000 Rows_sent: 0  Rows_examined: 0SET timestamp=1569081779;call action start_seamless_scaling('AQEAAB1P/PAIqvTHEQFJAEkojZUoH176FGJttZ62JF5QmRehaf0S0VFTa+5MPJdYQ9k0/sekBlnMi8U=', 300000, 2);
+SET timestamp=1569862702;`,
+			ExpectedOutput: map[string]interface{}{
+				"env":              "deploy-env",
+				"hostname":         "aws-rds",
+				"programname":      "production-aurora-test-db",
+				"decoder_msg_type": "syslog",
+				"rawlog":           "Slow query: # Time: 190921 16:02:59\n# User@Host: rdsadmin[rdsadmin] @ localhost []  Id:     1\n# Query_time: 22.741550  Lock_time: 0.000000 Rows_sent: 0  Rows_examined: 0SET timestamp=1569081779;call action start_seamless_scaling('AQEAAB1P/PAIqvTHEQFJAEkojZUoH176FGJttZ62JF5QmRehaf0S0VFTa+5MPJdYQ9k0/sekBlnMi8U=', 300000, 2);\nSET timestamp=1569862702;",
+				"timestamp":        logTime2,
+				"user":             "rdsadmin[rdsadmin]",
+				"user_id":          "1",
+			},
+		},
 	}
 	for _, spec := range specs {
 		t.Run(fmt.Sprintf(spec.Title), func(t *testing.T) {
