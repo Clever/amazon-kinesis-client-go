@@ -110,14 +110,34 @@ func FieldsFromKayvee(line string) (map[string]interface{}, error) {
 var userPattern = `#\sUser@Host:\s(?P<user>[a-zA-Z]+\[[a-zA-Z]+\])\s@\s[a-zA-Z]+.*Id:\s+(?P<id>[0-9]+)`
 var userPatternRegex = regexp.MustCompile(userPattern)
 
+// FieldsFromRDSSlowquery adds the user, user_id, and _kvmeta fields. _kvmeta is used for routing
+// metrics to signalFX
 func FieldsFromRDSSlowquery(rawlog string) map[string]interface{} {
+	user := ""
 	out := map[string]interface{}{}
 
+	// parse user
 	match := userPatternRegex.FindStringSubmatch(rawlog)
 	if len(match) == 3 {
-		out["user"] = match[1]
+		user = match[1]
+		out["user"] = user
 		out["user_id"] = match[2]
 	}
+
+	// add kvmeta for alert log routing
+	out["_kvmeta"] = map[string]interface{}{
+		"routes": []interface{}{
+			map[string]interface{}{
+				"dimensions":  []string{"hostname", "programname", user},
+				"rule":        "slowquery",
+				"series":      "rds.slowquery",
+				"stat_type":   "counter",
+				"type":        "alerts",
+				"value_field": "value",
+			},
+		},
+	}
+
 	return out
 }
 
