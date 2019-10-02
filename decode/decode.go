@@ -107,6 +107,20 @@ func FieldsFromKayvee(line string) (map[string]interface{}, error) {
 	return m, nil
 }
 
+var userPattern = `#\sUser@Host:\s(?P<user>[a-zA-Z]+\[[a-zA-Z]+\])\s@\s[a-zA-Z]+.*Id:\s+(?P<id>[0-9]+)`
+var userPatternRegex = regexp.MustCompile(userPattern)
+
+func FieldsFromRDSSlowquery(rawlog string) map[string]interface{} {
+	out := map[string]interface{}{}
+
+	match := userPatternRegex.FindStringSubmatch(rawlog)
+	if len(match) == 3 {
+		out["user"] = match[1]
+		out["user_id"] = match[2]
+	}
+	return out
+}
+
 // MetricsRoute represents a metrics kv log route
 type MetricsRoute struct {
 	Series     string
@@ -417,6 +431,14 @@ func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
 	meta, err := getContainerMeta(programname, forceEnv, forceApp, forceTask)
 	if err == nil {
 		for k, v := range meta {
+			out[k] = v
+		}
+	}
+
+	// Try pulling RDS slowquery logs fields out of message
+	if out["hostname"] == "aws-rds" {
+		slowQueryFields := FieldsFromRDSSlowquery(rawlog)
+		for k, v := range slowQueryFields {
 			out[k] = v
 		}
 	}
