@@ -107,7 +107,7 @@ func FieldsFromKayvee(line string) (map[string]interface{}, error) {
 	return m, nil
 }
 
-var userPattern = `#\sUser@Host:\s(?P<user>[a-zA-Z]+\[[a-zA-Z]+\])\s@\s[a-zA-Z]+.*Id:\s+(?P<id>[0-9]+)`
+var userPattern = `#\sUser@Host:\s(?P<user>[a-zA-Z]+\[[a-zA-Z]+\])\s@\s.*Id:\s+(?P<id>[0-9]+)`
 var userPatternRegex = regexp.MustCompile(userPattern)
 
 func FieldsFromRDSSlowquery(rawlog string) map[string]interface{} {
