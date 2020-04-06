@@ -37,7 +37,7 @@ download_jars:
 	mv $(TMP_DIR)/target/dependency/* $(JAR_DIR)/
 	# Download the STS jar file for supporting IAM Roles
 	ls $(JAR_DIR)/aws-java-sdk-core-*.jar | sed -e "s/.*-sdk-core-//g" | sed -e "s/\.jar//g" > /tmp/version.txt
-	curl -o $(JAR_DIR)/aws-java-sdk-sts-`cat /tmp/version.txt`.jar http://central.maven.org/maven2/com/amazonaws/aws-java-sdk-sts/`cat /tmp/version.txt`/aws-java-sdk-sts-`cat /tmp/version.txt`.jar
+	curl -o $(JAR_DIR)/aws-java-sdk-sts-`cat /tmp/version.txt`.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-sts/`cat /tmp/version.txt`/aws-java-sdk-sts-`cat /tmp/version.txt`.jar
 	rm -r $(TMP_DIR)
 
 all: test build
