@@ -116,6 +116,11 @@ var awsFargateLogStreamRegex = regexp.MustCompile(`^fargate/([a-z0-9-]+)--([a-z0
 // RDS slowquery log groups are in the form of /aws/rds/cluster/<database name>/slowquery
 var awsRDSLogGroupRegex = regexp.MustCompile(`^/aws/rds/cluster/([a-z0-9-]+)/slowquery$`)
 
+// glue log groups are of the form /aws-glue/jobs/<env>/<app>
+// glue log streams are of the form <job id>-<"driver" | "1" | "progress-bar">
+var awsGlueLogGroupRegex = regexp.MustCompile(`^/aws-glue/jobs/([a-z0-9-]+)/([a-z0-9-]+)$`)
+var awsGlueLogStreamRegex = regexp.MustCompile(`^(jr_[a-z0-9-]+)-.*$`)
+
 // arn and task cruft to satisfy parsing later on: https://github.com/Clever/amazon-kinesis-client-go/blob/94aacdf8339bd2cc8400d3bcb323dc1bce2c8422/decode/decode.go#L421-L425
 const arnCruft = `/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F`
 const taskCruft = `12345678-1234-1234-1234-555566667777`
@@ -228,6 +233,32 @@ func splitAWSRDS(b LogEventBatch) ([]RSysLogMessage, bool) {
 	return out, true
 }
 
+func splitAWSGlue(b LogEventBatch) ([]RSysLogMessage, bool) {
+	matches := awsGlueLogGroupRegex.FindAllStringSubmatch(b.LogGroup, 1)
+	if len(matches) != 1 {
+		return nil, false
+	}
+	env := matches[0][1]
+	app := matches[0][2]
+
+	streamMatches := awsGlueLogStreamRegex.FindAllStringSubmatch(b.LogStream, 1)
+	if len(streamMatches) != 1 {
+		return nil, false
+	}
+	jobID := streamMatches[0][1]
+
+	out := []RSysLogMessage{}
+	for _, event := range b.LogEvents {
+		out = append(out, RSysLogMessage{
+			Timestamp:   event.Timestamp.Time(),
+			ProgramName: env + "--" + app + arnCruft + jobID,
+			Hostname:    "aws-glue",
+			Message:     event.Message,
+		})
+	}
+	return out, true
+}
+
 func splitDefault(b LogEventBatch) []RSysLogMessage {
 	out := []RSysLogMessage{}
 	for _, event := range b.LogEvents {
@@ -260,6 +291,8 @@ func Split(b LogEventBatch) [][]byte {
 	} else if rsyslogMsgs, ok := splitAWSBatch(b); ok {
 		return stringify(rsyslogMsgs)
 	} else if rsyslogMsgs, ok := splitAWSRDS(b); ok {
+		return stringify(rsyslogMsgs)
+	} else if rsyslogMsgs, ok := splitAWSGlue(b); ok {
 		return stringify(rsyslogMsgs)
 	}
 	return stringify(splitDefault(b))
