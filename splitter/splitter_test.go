@@ -253,3 +253,33 @@ func TestSplitRDS(t *testing.T) {
 		assert.Equal(t, "Slow query: select * from table.", enhanced["rawlog"])
 	}
 }
+
+func TestSplitGlue(t *testing.T) {
+	input := LogEventBatch{
+		MessageType:         "DATA_MESSAGE",
+		Owner:               "123456789012",
+		LogGroup:            "/aws-glue/jobs/clever-dev/analytics-district-participation",
+		LogStream:           "jr_8927660fecacbe026ccab656cb80befea8102ac2023df531b92889b112aada28-1",
+		SubscriptionFilters: []string{"ForwardLogsToKinesis"},
+		LogEvents: []LogEvent{
+			{
+				ID:        "99999992379011144044923130086453437181614530551221780480",
+				Timestamp: NewUnixTimestampMillis(1498519943285),
+				Message:   "foo bar.",
+			},
+		},
+	}
+	lines := Split(input)
+	expected := [][]byte{
+		[]byte(`2017-06-26T23:32:23.285001+00:00 aws-glue clever-dev--analytics-district-participation/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2Fjr_8927660fecacbe026ccab656cb80befea8102ac2023df531b92889b112aada28: foo bar.`),
+	}
+	assert.Equal(t, expected, lines)
+	for _, line := range expected {
+		enhanced, err := decode.ParseAndEnhance(string(line), "")
+		require.Nil(t, err)
+		assert.Equal(t, "aws-glue", enhanced["hostname"])
+		assert.Equal(t, "clever-dev", enhanced["container_env"])
+		assert.Equal(t, "analytics-district-participation", enhanced["container_app"])
+		assert.Equal(t, "jr_8927660fecacbe026ccab656cb80befea8102ac2023df531b92889b112aada28", enhanced["container_task"])
+	}
+}
