@@ -258,7 +258,7 @@ func TestSplitGlue(t *testing.T) {
 	input := LogEventBatch{
 		MessageType:         "DATA_MESSAGE",
 		Owner:               "123456789012",
-		LogGroup:            "/aws-glue/jobs/clever-dev/analytics-district-participation",
+		LogGroup:            "/aws-glue/jobs/clever-dev/analytics-district-participation/aae75f00",
 		LogStream:           "jr_8927660fecacbe026ccab656cb80befea8102ac2023df531b92889b112aada28-1",
 		SubscriptionFilters: []string{"ForwardLogsToKinesis"},
 		LogEvents: []LogEvent{

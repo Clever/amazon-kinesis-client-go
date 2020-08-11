@@ -116,9 +116,9 @@ var awsFargateLogStreamRegex = regexp.MustCompile(`^fargate/([a-z0-9-]+)--([a-z0
 // RDS slowquery log groups are in the form of /aws/rds/cluster/<database name>/slowquery
 var awsRDSLogGroupRegex = regexp.MustCompile(`^/aws/rds/cluster/([a-z0-9-]+)/slowquery$`)
 
-// glue log groups are of the form /aws-glue/jobs/<env>/<app>
+// glue log groups are of the form /aws-glue/jobs/<env>/<app>/<pod-id>
 // glue log streams are of the form <job id>-<"driver" | "1" | "progress-bar">
-var awsGlueLogGroupRegex = regexp.MustCompile(`^/aws-glue/jobs/([a-z0-9-]+)/([a-z0-9-]+)$`)
+var awsGlueLogGroupRegex = regexp.MustCompile(`^/aws-glue/jobs/([a-z0-9-]+)/([a-z0-9-]+)/([a-z0-9-]+)$`)
 var awsGlueLogStreamRegex = regexp.MustCompile(`^(jr_[a-z0-9-]+)-.*$`)
 
 // arn and task cruft to satisfy parsing later on: https://github.com/Clever/amazon-kinesis-client-go/blob/94aacdf8339bd2cc8400d3bcb323dc1bce2c8422/decode/decode.go#L421-L425
