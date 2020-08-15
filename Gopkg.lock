@@ -3,89 +3,120 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:8b02380580838bb27fd272f09a467b29351cc2af18e54ee8497118b91cc8aed4"
   name = "github.com/Clever/syslogparser"
   packages = [
     ".",
-    "rfc3164"
+    "rfc3164",
   ]
+  pruneopts = ""
   revision = "fb28ad3e4340c046323b7beba685a72fd12ecbe8"
 
 [[projects]]
+  digest = "1:0deddd908b6b4b768cfc272c16ee61e7088a60f7fe2f06c547bd3d8e1f8b8e77"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
+  pruneopts = ""
   revision = "8991bc29aa16c548c550c7ff78260e27b9ab7c73"
   version = "v1.1.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:c7a6f4f1e7baeabf4de954d2d7f82343252f9e66b40abf694687b1df6fbccd5e"
   name = "github.com/jeromer/syslogparser"
   packages = ["."]
+  pruneopts = ""
   revision = "5fbaaf06d9e72f781d19c61e130ba63f4d6dab31"
 
 [[projects]]
+  digest = "1:256484dbbcd271f9ecebc6795b2df8cad4c458dd0f5fd82a8c2fa0c29f233411"
   name = "github.com/pmezard/go-difflib"
   packages = ["difflib"]
+  pruneopts = ""
   revision = "792786c7400a136282c1664665ae0a8db921c6c2"
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:83fd2513b9f6ae0997bf646db6b74e9e00131e31002116fda597175f25add42d"
   name = "github.com/stretchr/testify"
   packages = [
     "assert",
-    "require"
+    "require",
   ]
+  pruneopts = ""
   revision = "f654a9112bbeac49ca2cd45bfbe11533c4666cf8"
   version = "v1.6.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:5372ed388f189f6204f1864a2bae1ce9bbdf33f47528ffc776d31a649e3978aa"
   name = "github.com/xeipuuv/gojsonpointer"
   packages = ["."]
+  pruneopts = ""
   revision = "02993c407bfbf5f6dae44c4f4b1cf6a39b5fc5bb"
 
 [[projects]]
   branch = "master"
+  digest = "1:604f98a38394d2805a78c462396a4992b93fdd5b7306130add330f1a99ac6b0a"
   name = "github.com/xeipuuv/gojsonreference"
   packages = ["."]
+  pruneopts = ""
   revision = "bd5ef7bd5415a7ac448318e64f11a24cd21e594b"
 
 [[projects]]
   branch = "master"
+  digest = "1:225b26e2d1bcccbb48495d411cd38c73a5abd82ead929364b2bc73f1b3172aba"
   name = "github.com/xeipuuv/gojsonschema"
   packages = ["."]
+  pruneopts = ""
   revision = "065759f9c3d72653843069184bab4f5622926edf"
 
 [[projects]]
   branch = "master"
+  digest = "1:16ac54afcd01fa0b6380549d531e7dde651f53f35b8582bf0e54190856fea63d"
   name = "golang.org/x/time"
   packages = ["rate"]
+  pruneopts = ""
   revision = "3af7569d3a1e776fc2a3c1cec133b43105ea9c2e"
 
 [[projects]]
+  digest = "1:0923ed679d96b9e53b8c43892e2094ebb5dccd0a66709b20c90f43c37ff71ff1"
   name = "gopkg.in/Clever/kayvee-go.v6"
   packages = [
     ".",
     "logger",
-    "router"
+    "router",
   ]
-  revision = "08ee0456210a1eedbe9790402011831f42e2a5b0"
-  version = "v6.23.0"
+  pruneopts = ""
+  revision = "1c544ce9daf62e3673f4f1ba0bffde53cd13f502"
+  version = "v6.24.0"
 
 [[projects]]
   branch = "v2"
+  digest = "1:0963c61acf879ae8b78a659a2864016eb61020c46c93f402041684b80d5963b6"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
+  pruneopts = ""
   revision = "b893565b90ca5ebaabd27e535c0e56f97856e5ff"
 
 [[projects]]
   branch = "v3"
+  digest = "1:2e9c4d6def1d36dcd17730e00c06b49a2e97ea5e1e639bcd24fa60fa43e33ad6"
   name = "gopkg.in/yaml.v3"
   packages = ["."]
+  pruneopts = ""
   revision = "eeeca48fe7764f320e4870d231902bf9c1be2c08"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4699293f3632dd38561ff60477aa7cc1ecaadc5808b974d017099e2189679286"
+  input-imports = [
+    "github.com/Clever/syslogparser",
+    "github.com/Clever/syslogparser/rfc3164",
+    "github.com/stretchr/testify/assert",
+    "github.com/stretchr/testify/require",
+    "golang.org/x/time/rate",
+    "gopkg.in/Clever/kayvee-go.v6/logger",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
