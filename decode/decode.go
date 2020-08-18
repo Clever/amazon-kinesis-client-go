@@ -2,9 +2,11 @@ package decode
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Clever/syslogparser/rfc3164"
 )
@@ -15,9 +17,18 @@ var reservedFields = []string{
 	"prefix",
 	"postfix",
 	"decoder_msg_type",
+
+	// used by all logs
 	"timestamp",
 	"hostname",
 	"rawlog",
+
+	// Used by Kayvee
+	"prefix",
+	"postfix",
+
+	// Set to the deepest step of parsing that succeeded
+	"decoder_msg_type",
 }
 
 func stringInSlice(s string, slice []string) bool {
@@ -385,17 +396,21 @@ func ExtractKVMeta(kvlog map[string]interface{}) KVMeta {
 
 // ParseAndEnhance extracts fields from a log line, and does some post-processing to rename/add fields
 func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
-	out := map[string]interface{}{}
+	syslog, syslogErr := FieldsFromSyslog(line)
+	if syslogErr == nil {
+		return decodeSyslog(syslog, env)
+	}
 
-	syslogFields, err := FieldsFromSyslog(line)
-	if err != nil {
-		return map[string]interface{}{}, err
+	fluentLog, fluentErr := FieldsFromFluentbitLog(line)
+	if fluentErr == nil {
+		return decodeFluent(fluentLog, env)
 	}
-	for k, v := range syslogFields {
-		out[k] = v
-	}
-	rawlog := syslogFields["rawlog"].(string)
-	programname := syslogFields["programname"].(string)
+
+	return nil, fmt.Errorf("unable to parse log line with errors `%v` and `%v`", syslogErr, fluentErr)
+}
+
+func decodeSyslog(syslog map[string]interface{}, env string) (map[string]interface{}, error) {
+	rawlog := syslog["rawlog"].(string)
 
 	// Try pulling Kayvee fields out of message
 	kvFields, err := FieldsFromKayvee(rawlog)
@@ -405,45 +420,25 @@ func ParseAndEnhance(line string, env string) (map[string]interface{}, error) {
 		}
 	} else {
 		for k, v := range kvFields {
-			out[k] = v
-		}
-	}
-
-	// Inject additional fields that are useful in log-searching and other business logic
-	out["env"] = env
-
-	// Sometimes its useful to force `container_{env,app,task}`. A specific use-case is writing Docker events.
-	// A separate container monitors for start/stop events, but we set the container values in such a way that
-	// the logs for these events will appear in context for the app that the user is looking at instead of the
-	// docker-events app.
-	forceEnv := ""
-	forceApp := ""
-	forceTask := ""
-	if cEnv, ok := out["container_env"]; ok {
-		forceEnv = cEnv.(string)
-	}
-	if cApp, ok := out["container_app"]; ok {
-		forceApp = cApp.(string)
-	}
-	if cTask, ok := out["container_task"]; ok {
-		forceTask = cTask.(string)
-	}
-	meta, err := getContainerMeta(programname, forceEnv, forceApp, forceTask)
-	if err == nil {
-		for k, v := range meta {
-			out[k] = v
+			syslog[k] = v
 		}
 	}
 
 	// Try pulling RDS slowquery logs fields out of message
-	if out["hostname"] == "aws-rds" {
+	if syslog["hostname"] == "aws-rds" {
 		slowQueryFields := FieldsFromRDSSlowquery(rawlog)
 		for k, v := range slowQueryFields {
-			out[k] = v
+			syslog[k] = v
 		}
 	}
 
-	return out, nil
+	// Inject additional fields that are useful in log-searching and other business logic
+	syslog["env"] = env
+
+	// this can error, which indicates inability to extract container meta. That's fine, we can ignore that.
+	addContainterMetaToSyslog(syslog)
+
+	return syslog, nil
 }
 
 const containerMeta = `([a-z0-9-]+)--([a-z0-9-]+)\/` + // env--app
@@ -452,9 +447,12 @@ const containerMeta = `([a-z0-9-]+)--([a-z0-9-]+)\/` + // env--app
 
 var containerMetaRegex = regexp.MustCompile(containerMeta)
 
-func getContainerMeta(programname, forceEnv, forceApp, forceTask string) (map[string]string, error) {
-	if programname == "" {
-		return map[string]string{}, fmt.Errorf("no programname")
+var errBadProgramname = errors.New("invalid or missing programname")
+
+func addContainterMetaToSyslog(syslog map[string]interface{}) (map[string]interface{}, error) {
+	programname, ok := syslog["programname"].(string)
+	if !ok || programname == "" {
+		return syslog, errBadProgramname
 	}
 
 	env := ""
@@ -465,25 +463,116 @@ func getContainerMeta(programname, forceEnv, forceApp, forceTask string) (map[st
 		env = matches[0][1]
 		app = matches[0][2]
 		task = matches[0][4]
+	} else {
+		return syslog, errBadProgramname
 	}
 
-	if forceEnv != "" {
-		env = forceEnv
+	// Sometimes its useful to force `container_{env,app,task}`. A specific use-case is writing Docker events.
+	// A separate container monitors for start/stop events, but we set the container values in such a way that
+	// the logs for these events will appear in context for the app that the user is looking at instead of the
+	// docker-events app.
+	if existingEnv, ok := syslog["container_env"].(string); !ok || existingEnv == "" {
+		syslog["container_env"] = env
 	}
-	if forceApp != "" {
-		app = forceApp
+	if existingApp, ok := syslog["container_app"].(string); !ok || existingApp == "" {
+		syslog["container_app"] = app
 	}
-	if forceTask != "" {
-		task = forceTask
+	if existingTask, ok := syslog["container_task"].(string); !ok || existingTask == "" {
+		syslog["container_task"] = task
 	}
 
-	if env == "" || app == "" || task == "" {
-		return map[string]string{}, fmt.Errorf("unable to get one or more of env/app/task")
+	return syslog, nil
+}
+
+const (
+	// These are the fields in the incoming fluentbit JSON that we expect the timestamp and log
+	// They are referenced below by the FluentLog type; those are the ones that matter.
+	fluentbitTimestampField = "fluent_ts"
+	fluentbitLogField       = "log"
+
+	// This is what we get from the fluentbig config: `time_key_format: "%Y-%m-%dT%H:%M:%S.%L%z"`
+	fluentTimeFormat = "2006-01-02T15:04:05.999-0700"
+)
+
+// FluentLog represents is the set of fields extracted from an incoming fluentbit log
+// The struct tags must line up with the JSON schema in the fluentbit configuration, see the comment for FieldsFromFluentBitlog
+type FluentLog struct {
+	Log            *string `json:"log"`
+	Timestamp      *string `json:"fluent_ts"`
+	TaskArn        string  `json:"ecs_task_arn"`
+	TaskDefinition string  `json:"ecs_task_definition"`
+}
+
+// FieldsFromFluentbitLog parses JSON object with fields indicating that it's coming from FluentBit
+// Its return value shares a common interface with the Syslog output - with the same four key fields
+// Unlike FieldsFromSyslog, it accepts its argument as bytes, since it will be used as bytes immediately and bytes is what comes off the firehose
+// In theory, the format we recieve is highly customizable, so we'll be making the following assumptions:
+// - All logs are coming from aws-fargate with the ecs-metadata fields (ecs_cluster, ecs_task_arn, ecs_task_definition) enabled
+// - The timestamp is in the field given by the FluentBitTimestampField constant in this package
+// - The timestamp is of the format of the constant fluentTimestampFormat
+// - The log is in the field given by the FluentBitlogField constant in this package
+// - The ecs_task_definition is of the from {environment}--{application}--.*
+func FieldsFromFluentbitLog(line string) (*FluentLog, error) {
+	fluentFields := FluentLog{}
+	if err := json.Unmarshal([]byte(line), &fluentFields); err != nil {
+		return nil, BadLogFormatError{Format: "fluentbit", DecodingError: err}
 	}
 
-	return map[string]string{
-		"container_env":  env,
-		"container_app":  app,
-		"container_task": task,
-	}, nil
+	return &fluentFields, nil
+}
+
+func decodeFluent(fluentLog *FluentLog, env string) (map[string]interface{}, error) {
+	out := map[string]interface{}{}
+	if fluentLog.Timestamp == nil || *fluentLog.Timestamp == "" {
+		return nil, BadLogFormatError{Format: "fluentbit", DecodingError: fmt.Errorf("no timestamp found in input field %s", fluentbitTimestampField)}
+	}
+
+	if timeValue, err := time.Parse(fluentTimeFormat, *fluentLog.Timestamp); err == nil {
+		out["timestamp"] = timeValue
+	} else {
+		return nil, BadLogFormatError{Format: "fluentbit", DecodingError: fmt.Errorf("timestamp has bad format: %s", *fluentLog.Timestamp)}
+	}
+
+	if fluentLog.Log == nil {
+		return nil, BadLogFormatError{Format: "fluentbit", DecodingError: fmt.Errorf("no log found in input field %s", fluentbitLogField)}
+	}
+	log := *fluentLog.Log
+	out["rawlog"] = log
+
+	out["decoder_msg_type"] = "fluentbit"
+	out["hostname"] = "aws-fargate"
+
+	// best effort to add container_env|app|task
+	if parts := strings.SplitN(fluentLog.TaskDefinition, "--", 3); len(parts) == 3 {
+		out["container_env"] = parts[0]
+		out["container_app"] = parts[1]
+	}
+	if idx := strings.LastIndex(fluentLog.TaskArn, "/"); idx != -1 {
+		out["container_task"] = fluentLog.TaskArn[idx+1:]
+	}
+
+	kvFields, err := FieldsFromKayvee(log)
+	if err == nil {
+		for k, v := range kvFields {
+			out[k] = v
+		}
+	}
+
+	// Inject additional fields that are useful in log-searching and other business logic; mimicking syslog behavior
+	out["env"] = env
+
+	return out, nil
+}
+
+type BadLogFormatError struct {
+	Format        string
+	DecodingError error
+}
+
+func (b BadLogFormatError) Error() string {
+	return fmt.Sprintf("trying to decode log as format %s: %v", b.Format, b.DecodingError)
+}
+
+func (b BadLogFormatError) Unwrap() error {
+	return b.DecodingError
 }

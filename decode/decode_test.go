@@ -1,6 +1,7 @@
 package decode
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -221,10 +222,10 @@ func TestSyslogDecoding(t *testing.T) {
 			fields, err := FieldsFromSyslog(spec.Input)
 			if spec.ExpectedError != nil {
 				assert.Error(err)
-				assert.IsType(spec.ExpectedError, err)
-			} else {
-				assert.NoError(err)
+				assert.True(errors.As(err, &spec.ExpectedError))
+				return
 			}
+			assert.NoError(err)
 			assert.Equal(spec.ExpectedOutput, fields)
 		})
 	}
@@ -250,6 +251,11 @@ func TestParseAndEnhance(t *testing.T) {
 		t.Fatal(err)
 	}
 	logTime3 = logTime3.UTC()
+
+	logTime4, err := time.Parse(fluentTimeFormat, "2020-08-13T21:10:57.000+0000")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	specs := []ParseAndEnhanceSpec{
 		ParseAndEnhanceSpec{
@@ -307,10 +313,10 @@ func TestParseAndEnhance(t *testing.T) {
 			ExpectedError: nil,
 		},
 		ParseAndEnhanceSpec{
-			Title:          "Fails to parse non-RSyslog log line",
+			Title:          "Fails to parse non-RSyslog, non-Fluent log line",
 			Line:           `not rsyslog`,
 			ExpectedOutput: map[string]interface{}{},
-			ExpectedError:  &syslogparser.ParserError{},
+			ExpectedError:  fmt.Errorf(""),
 		},
 		ParseAndEnhanceSpec{
 			Title: "Parses JSON values",
@@ -379,6 +385,161 @@ select sleep(2);`,
 				"user_id":          "868",
 			},
 		},
+		{
+			Title: "Valid fluent log",
+			Line: `{
+  "container_id": "b17752cdd47a480712eca6c9774d782f68b50a876446faec5e26c9e8846bd29e",
+  "container_name": "/ecs-env--app--d--2-2-env--app-e295a2dcf6f9ac849101",
+  "ecs_cluster": "arn:aws:ecs:us-east-1:589690932525:cluster/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1",
+  "ecs_task_arn": "arn:aws:ecs:us-east-1:589690932525:task/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1/7c1ccb5cb5c44582808b9e516b479eb6",
+  "ecs_task_definition": "env--app--d--2:2",
+  "fluent_ts": "2020-08-13T21:10:57.000+0000",
+  "log": "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+  "source": "stderr"
+}`,
+			ExpectedOutput: map[string]interface{}{
+				"timestamp":        logTime4,
+				"rawlog":           "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+				"hostname":         "aws-fargate",
+				"decoder_msg_type": "Kayvee",
+				"title":            "request-finished",
+				"container_app":    "app",
+				"container_env":    "env",
+				"container_task":   "7c1ccb5cb5c44582808b9e516b479eb6",
+				"prefix":           "2020/08/13 21:10:57 ",
+				"postfix":          "",
+				"env":              "deploy-env",
+			},
+			ExpectedError: nil,
+		},
+		{
+			Title: "fluent log missing ecs_task_definition still parses and has container_task",
+			Line: `{
+  "container_id": "b17752cdd47a480712eca6c9774d782f68b50a876446faec5e26c9e8846bd29e",
+  "container_name": "/ecs-env--app--d--2-2-env--app-e295a2dcf6f9ac849101",
+  "ecs_cluster": "arn:aws:ecs:us-east-1:589690932525:cluster/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1",
+  "ecs_task_arn": "arn:aws:ecs:us-east-1:589690932525:task/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1/7c1ccb5cb5c44582808b9e516b479eb6",
+  "fluent_ts": "2020-08-13T21:10:57.000+0000",
+  "log": "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+  "source": "stderr"
+}`,
+			ExpectedOutput: map[string]interface{}{
+				"timestamp":        logTime4,
+				"rawlog":           "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+				"hostname":         "aws-fargate",
+				"decoder_msg_type": "Kayvee",
+				"title":            "request-finished",
+				"container_task":   "7c1ccb5cb5c44582808b9e516b479eb6",
+				"prefix":           "2020/08/13 21:10:57 ",
+				"postfix":          "",
+				"env":              "deploy-env",
+			},
+		},
+		{
+			Title: "fluent log with bad ecs_task_definition format still parses and has container_task",
+			Line: `{
+  "container_id": "b17752cdd47a480712eca6c9774d782f68b50a876446faec5e26c9e8846bd29e",
+  "container_name": "/ecs-env--app--d--2-2-env--app-e295a2dcf6f9ac849101",
+  "ecs_cluster": "arn:aws:ecs:us-east-1:589690932525:cluster/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1",
+  "ecs_task_arn": "arn:aws:ecs:us-east-1:589690932525:task/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1/7c1ccb5cb5c44582808b9e516b479eb6",
+  "ecs_task_definition": "env--app",
+  "fluent_ts": "2020-08-13T21:10:57.000+0000",
+  "log": "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+  "source": "stderr"
+}`,
+			ExpectedOutput: map[string]interface{}{
+				"timestamp":        logTime4,
+				"rawlog":           "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+				"hostname":         "aws-fargate",
+				"decoder_msg_type": "Kayvee",
+				"title":            "request-finished",
+				"container_task":   "7c1ccb5cb5c44582808b9e516b479eb6",
+				"prefix":           "2020/08/13 21:10:57 ",
+				"postfix":          "",
+				"env":              "deploy-env",
+			},
+		},
+		{
+			Title: "fluent log missing ecs_task_arn still parses and has containter_env and app",
+			Line: `{
+  "container_id": "b17752cdd47a480712eca6c9774d782f68b50a876446faec5e26c9e8846bd29e",
+  "container_name": "/ecs-env--app--d--2-2-env--app-e295a2dcf6f9ac849101",
+  "ecs_cluster": "arn:aws:ecs:us-east-1:589690932525:cluster/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1",
+  "ecs_task_definition": "env--app--d--2:2",
+  "fluent_ts": "2020-08-13T21:10:57.000+0000",
+  "log": "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+  "source": "stderr"
+}`,
+			ExpectedOutput: map[string]interface{}{
+				"timestamp":        logTime4, // time.Date(2020, 8, 13, 21, 10, 57, 0, time.UTC),
+				"rawlog":           "2020/08/13 21:10:57 {\"title\": \"request-finished\"}",
+				"hostname":         "aws-fargate",
+				"decoder_msg_type": "Kayvee",
+				"title":            "request-finished",
+				"container_env":    "env",
+				"container_app":    "app",
+				"prefix":           "2020/08/13 21:10:57 ",
+				"postfix":          "",
+				"env":              "deploy-env",
+			},
+		},
+		{
+			Title: "fluent log missing timestamp is an error",
+			Line: `{
+  "container_id": "b17752cdd47a480712eca6c9774d782f68b50a876446faec5e26c9e8846bd29e",
+  "container_name": "/ecs-env--app--d--2-2-env--app-e295a2dcf6f9ac849101",
+  "ecs_cluster": "arn:aws:ecs:us-east-1:589690932525:cluster/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1",
+  "ecs_task_arn": "arn:aws:ecs:us-east-1:589690932525:task/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1/7c1ccb5cb5c44582808b9e516b479eb6",
+  "ecs_task_definition": "env--app--d--2:2",
+  "ts": "2020-08-13T21:10:57.000+0000",
+  "log": "2020/08/13 21:10:57 {\"deploy_env\":\"env\",\"level\":\"info\",\"pod-account\":\"589690932525\",\"pod-id\":\"2870425d-e4b1-4869-b2b7-a6d9fade9be1\",\"pod-region\":\"us-east-1\",\"pod-shortname\":\"us-east-1-dev-canary-2870425d\",\"source\":\"app-service\",\"title\":\"NumFDs\",\"type\":\"gauge\",\"value\":33,\"via\":\"process-metrics\"}",
+  "source": "stderr"
+}`,
+			ExpectedOutput: nil,
+			ExpectedError:  BadLogFormatError{},
+		},
+		{
+			Title: "fluent log with bad timestamp format is an error",
+			Line: `{
+  "container_id": "b17752cdd47a480712eca6c9774d782f68b50a876446faec5e26c9e8846bd29e",
+  "container_name": "/ecs-env--app--d--2-2-env--app-e295a2dcf6f9ac849101",
+  "ecs_cluster": "arn:aws:ecs:us-east-1:589690932525:cluster/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1",
+  "ecs_task_arn": "arn:aws:ecs:us-east-1:589690932525:task/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1/7c1ccb5cb5c44582808b9e516b479eb6",
+  "ecs_task_definition": "env--app--d--2:2",
+  "fluent_ts": "2020-08-13T21:10:57.000Z",
+  "log": "2020/08/13 21:10:57 {\"deploy_env\":\"env\",\"level\":\"info\",\"pod-account\":\"589690932525\",\"pod-id\":\"2870425d-e4b1-4869-b2b7-a6d9fade9be1\",\"pod-region\":\"us-east-1\",\"pod-shortname\":\"us-east-1-dev-canary-2870425d\",\"source\":\"app-service\",\"title\":\"NumFDs\",\"type\":\"gauge\",\"value\":33,\"via\":\"process-metrics\"}",
+  "source": "stderr"
+}`,
+			ExpectedOutput: nil,
+			ExpectedError:  BadLogFormatError{},
+		},
+		{
+			Title: "Valid fluent log with overrides for container_env, app, and task",
+			Line: `{
+  "container_id": "b17752cdd47a480712eca6c9774d782f68b50a876446faec5e26c9e8846bd29e",
+  "container_name": "/ecs-env--app--d--2-2-env--app-e295a2dcf6f9ac849101",
+  "ecs_cluster": "arn:aws:ecs:us-east-1:589690932525:cluster/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1",
+  "ecs_task_arn": "arn:aws:ecs:us-east-1:589690932525:task/pod-2870425d-e4b1-4869-b2b7-a6d9fade9be1/7c1ccb5cb5c44582808b9e516b479eb6",
+  "ecs_task_definition": "env--app--d--2:2",
+  "fluent_ts": "2020-08-13T21:10:57.000+0000",
+  "log": "2020/08/13 21:10:57 {\"title\": \"request-finished\", \"container_env\": \"env2\", \"container_task\": \"task\", \"container_app\": \"app2\"}",
+  "source": "stderr"
+}`,
+			ExpectedOutput: map[string]interface{}{
+				"timestamp":        logTime4,
+				"rawlog":           "2020/08/13 21:10:57 {\"title\": \"request-finished\", \"container_env\": \"env2\", \"container_task\": \"task\", \"container_app\": \"app2\"}",
+				"hostname":         "aws-fargate",
+				"decoder_msg_type": "Kayvee",
+				"title":            "request-finished",
+				"container_app":    "app2",
+				"container_env":    "env2",
+				"container_task":   "task",
+				"prefix":           "2020/08/13 21:10:57 ",
+				"postfix":          "",
+				"env":              "deploy-env",
+			},
+			ExpectedError: nil,
+		},
 	}
 	for _, spec := range specs {
 		t.Run(fmt.Sprintf(spec.Title), func(t *testing.T) {
@@ -386,72 +547,114 @@ select sleep(2);`,
 			fields, err := ParseAndEnhance(spec.Line, "deploy-env")
 			if spec.ExpectedError != nil {
 				assert.Error(err)
-				assert.IsType(spec.ExpectedError, err)
-			} else {
-				assert.NoError(err)
+				assert.True(errors.As(err, &spec.ExpectedError))
+				return
 			}
+			assert.NoError(err)
 			assert.Equal(spec.ExpectedOutput, fields)
 		})
 	}
 }
 
 func TestGetContainerMeta(t *testing.T) {
-	assert := assert.New(t)
 
-	t.Log("Must have a programname to get container meta")
-	programname := ""
-	_, err := getContainerMeta(programname, "", "", "")
-	assert.Error(err)
+	type containerMetaSpec struct {
+		description       string
+		input             map[string]interface{}
+		wantErr           bool
+		wantContainerEnv  string
+		wantContainerApp  string
+		wantContainerTask string
+	}
 
-	t.Log("Can parse a programname")
-	programname = `env1--app2/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`
-	meta, err := getContainerMeta(programname, "", "", "")
-	assert.NoError(err)
-	assert.Equal(map[string]string{
-		"container_env":  "env1",
-		"container_app":  "app2",
-		"container_task": "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-	}, meta)
+	tests := []containerMetaSpec{
+		{
+			description: "Must have a programname to get container meta",
+			input: map[string]interface{}{
+				"programname": "",
+			},
+			wantErr: true,
+		},
+		{
+			description: "Can parse a programname",
+			input: map[string]interface{}{
+				"programname": `env1--app2/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
+			},
+			wantContainerEnv:  "env1",
+			wantContainerApp:  "app2",
+			wantContainerTask: "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
+		},
+		{
+			description: "Can override just 'env'",
+			input: map[string]interface{}{
+				"programname":   `env1--app2/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
+				"container_env": "force-env",
+			},
+			wantContainerEnv:  "force-env",
+			wantContainerApp:  "app2",
+			wantContainerTask: "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
+		},
+		{
+			description: "Can override just 'app'",
+			input: map[string]interface{}{
+				"programname":   `env1--app2/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
+				"container_app": "force-app",
+			},
+			wantContainerEnv:  "env1",
+			wantContainerApp:  "force-app",
+			wantContainerTask: "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
+		},
+		{
+			description: "Can override just 'task'",
+			input: map[string]interface{}{
+				"programname":    `env1--app2/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
+				"container_task": "force-task",
+			},
+			wantContainerEnv:  "env1",
+			wantContainerApp:  "app2",
+			wantContainerTask: "force-task",
+		},
+		{
+			description: "Can override all fields",
+			input: map[string]interface{}{
+				"programname":    `env1--app2/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`,
+				"container_task": "force-task",
+				"container_app":  "force-app",
+				"container_env":  "force-env",
+			},
+			wantContainerEnv:  "force-env",
+			wantContainerApp:  "force-app",
+			wantContainerTask: "force-task",
+		},
+	}
 
-	t.Log("Can override just 'env'")
-	overrideEnv := "force-env"
-	meta, err = getContainerMeta(programname, overrideEnv, "", "")
-	assert.NoError(err)
-	assert.Equal(map[string]string{
-		"container_env":  overrideEnv,
-		"container_app":  "app2",
-		"container_task": "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-	}, meta)
+	for _, tcase := range tests {
+		assert := assert.New(t)
 
-	t.Log("Can override just 'app'")
-	overrideApp := "force-app"
-	meta, err = getContainerMeta(programname, "", overrideApp, "")
-	assert.NoError(err)
-	assert.Equal(map[string]string{
-		"container_env":  "env1",
-		"container_app":  overrideApp,
-		"container_task": "abcd1234-1a3b-1a3b-1234-d76552f4b7ef",
-	}, meta)
+		syslog := map[string]interface{}{}
+		for k, v := range tcase.input {
+			syslog[k] = v
+		}
 
-	t.Log("Can override just 'task'")
-	overrideTask := "force-task"
-	meta, err = getContainerMeta(programname, "", "", overrideTask)
-	assert.NoError(err)
-	assert.Equal(map[string]string{
-		"container_env":  "env1",
-		"container_app":  "app2",
-		"container_task": overrideTask,
-	}, meta)
+		newSyslog, err := addContainterMetaToSyslog(syslog)
+		if tcase.wantErr {
+			assert.Error(err)
+			continue
+		}
+		for k, v := range newSyslog {
+			switch k {
+			case "container_env":
+				assert.Equal(v, tcase.wantContainerEnv)
+			case "container_app":
+				assert.Equal(v, tcase.wantContainerApp)
+			case "container_task":
+				assert.Equal(v, tcase.wantContainerTask)
+			default:
+				assert.Equal(v, tcase.input[k])
+			}
+		}
+	}
 
-	t.Log("Can override all fields")
-	programname = `env--app/arn%3Aaws%3Aecs%3Aus-west-1%3A999988887777%3Atask%2Fabcd1234-1a3b-1a3b-1234-d76552f4b7ef`
-	meta, err = getContainerMeta(programname, overrideEnv, overrideApp, overrideTask)
-	assert.NoError(err)
-	assert.Equal(map[string]string{
-		"container_env":  overrideEnv,
-		"container_app":  overrideApp,
-		"container_task": overrideTask,
-	}, meta)
 }
 
 func TestExtractKVMeta(t *testing.T) {
