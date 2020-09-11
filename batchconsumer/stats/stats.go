@@ -30,16 +30,17 @@ type datum struct {
 var queue = make(chan datum, 1000)
 
 func init() {
-	data := map[string]int{}
+	countData := map[string]int{}
+	gaugeData := map[string]int{}
 	tick := time.Tick(time.Minute)
 	go func() {
 		for {
 			select {
 			case d := <-queue:
 				if d.category == "counter" {
-					data[d.name] = data[d.name] + d.value
+					countData[d.name] = countData[d.name] + d.value
 				} else if d.category == "gauge" {
-					data[d.name] = d.value
+					gaugeData[d.name] = d.value
 				} else {
 					log.ErrorD("unknown-stat-category", logger.M{"category": d.category})
 				}
@@ -48,10 +49,14 @@ func init() {
 				for _, k := range DefaultCounters {
 					tmp[k] = 0
 				}
-				for k, v := range data {
+				for k, v := range countData {
+					tmp[k] = v
+				}
+				for k, v := range gaugeData {
 					tmp[k] = v
 				}
 				log.InfoD("stats", tmp)
+				countData = map[string]int{}
 			}
 		}
 	}()
