@@ -62,7 +62,7 @@ func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer
 
 func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error) {
 	// We handle three types of records:
-	// - records emitted from CWLogs Subscription
+	// - records emitted from CWLogs Subscription (which are gzip compressed)
 	// - uncompressed records emitted from KPL
 	// - zlib compressed records (e.g. as compressed and emitted by Kinesis plugin for Fluent Bit)
 	if splitter.IsGzipped(record) {
