@@ -3,6 +3,7 @@ package splitter
 import (
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +11,31 @@ import (
 	"strconv"
 	"time"
 )
+
+// SplitMessageIfNecessary handles three types of records:
+// - records emitted from CWLogs Subscription (which are gzip compressed)
+// - uncompressed records emitted from KPL
+// - zlib compressed records (e.g. as compressed and emitted by Kinesis plugin for Fluent Bi
+func SplitMessageIfNecessary(record []byte) ([][]byte, error) {
+	if IsGzipped(record) {
+		// Process a batch of messages from a CWLogs Subscription
+		return GetMessagesFromGzippedInput(record)
+	}
+
+	// Try to read it as a zlib-compressed record
+	// zlib.NewReader checks for a zlib header and returns an error if not found
+	zlibReader, err := zlib.NewReader(bytes.NewReader(record))
+	if err == nil {
+		unzlibRecord, err := ioutil.ReadAll(zlibReader)
+		if err != nil {
+			return nil, fmt.Errorf("reading zlib-compressed record: %v", err)
+		}
+		return [][]byte{unzlibRecord}, nil
+	}
+	// Process a single message, from KPL
+	return [][]byte{record}, nil
+
+}
 
 // LogEvent is a single log line within a LogEventBatch
 type LogEvent struct {
