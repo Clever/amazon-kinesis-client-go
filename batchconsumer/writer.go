@@ -1,12 +1,9 @@
 package batchconsumer
 
 import (
-	"bytes"
-	"compress/zlib"
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 
 	"golang.org/x/time/rate"
@@ -60,31 +57,6 @@ func (b *batchedWriter) Initialize(shardID string, checkpointer kcl.Checkpointer
 	return nil
 }
 
-func (b *batchedWriter) splitMessageIfNecessary(record []byte) ([][]byte, error) {
-	// We handle three types of records:
-	// - records emitted from CWLogs Subscription (which are gzip compressed)
-	// - uncompressed records emitted from KPL
-	// - zlib compressed records (e.g. as compressed and emitted by Kinesis plugin for Fluent Bit)
-	if splitter.IsGzipped(record) {
-		// Process a batch of messages from a CWLogs Subscription
-		return splitter.GetMessagesFromGzippedInput(record)
-	}
-
-	// Try to read it as a zlib-compressed record
-	// zlib.NewReader checks for a zlib header and returns an error if not found
-	zlibReader, err := zlib.NewReader(bytes.NewReader(record))
-	if err == nil {
-		unzlibRecord, err := ioutil.ReadAll(zlibReader)
-		if err != nil {
-			return nil, fmt.Errorf("reading zlib-compressed record: %v", err)
-		}
-		return [][]byte{unzlibRecord}, nil
-	}
-	// Process a single message, from KPL
-	return [][]byte{record}, nil
-
-}
-
 func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 	var pair kcl.SequencePair
 	prevPair := b.lastProcessedSeq
@@ -108,7 +80,7 @@ func (b *batchedWriter) ProcessRecords(records []kcl.Record) error {
 			return err
 		}
 
-		messages, err := b.splitMessageIfNecessary(data)
+		messages, err := splitter.SplitMessageIfNecessary(data)
 		if err != nil {
 			return err
 		}

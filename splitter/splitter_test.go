@@ -3,9 +3,11 @@ package splitter
 import (
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
 	b64 "encoding/base64"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/Clever/amazon-kinesis-client-go/decode"
 	"github.com/stretchr/testify/assert"
@@ -282,4 +284,68 @@ func TestSplitGlue(t *testing.T) {
 		assert.Equal(t, "analytics-district-participation", enhanced["container_app"])
 		assert.Equal(t, "jr_8927660fecacbe026ccab656cb80befea8102ac2023df531b92889b112aada28", enhanced["container_task"])
 	}
+}
+
+func TestSplitIfNecesary(t *testing.T) {
+
+	// We provide three different inputs to batchedWriter.splitMessageIfNecessary
+	// plain text
+	// zlib compressed text
+	// gzip compressed CloudWatch logs batch
+	// we verify that the split function matches the input against the correct splitter
+	// and decodes it.
+
+	assert := assert.New(t)
+
+	plainTextInput := []byte("hello, world!")
+
+	records, err := SplitMessageIfNecessary(plainTextInput)
+	assert.NoError(err)
+	assert.Equal(
+		records,
+		[][]byte{[]byte("hello, world!")},
+	)
+
+	var z bytes.Buffer
+	zbuf := zlib.NewWriter(&z)
+	zbuf.Write([]byte("hello, world!"))
+	zbuf.Close()
+	zlibSingleInput := z.Bytes()
+
+	records, err = SplitMessageIfNecessary(zlibSingleInput)
+	assert.NoError(err)
+	assert.Equal(
+		records,
+		[][]byte{[]byte("hello, world!")},
+	)
+
+	// the details of this part aren't super important since the actual functionality is
+	// tested in other tests; for this test we just want to make sure that split function
+	// correctly realizes it's gzip and call the appropriate CW-log-splitting logic
+	var g bytes.Buffer
+	gbuf := gzip.NewWriter(&g)
+	cwLogBatch := LogEventBatch{
+		MessageType:         "test",
+		Owner:               "test",
+		LogGroup:            "test",
+		LogStream:           "test",
+		SubscriptionFilters: []string{""},
+		LogEvents: []LogEvent{{
+			ID:        "test",
+			Timestamp: UnixTimestampMillis(time.Date(2020, time.September, 9, 9, 10, 10, 0, time.UTC)),
+			Message:   "test",
+		}},
+	}
+	cwLogBatchJSON, _ := json.Marshal(cwLogBatch)
+	gbuf.Write(cwLogBatchJSON)
+	gbuf.Close()
+	gzipBatchInput := g.Bytes()
+
+	expectedRecord := []byte("2020-09-09T09:10:10.000001+00:00 test test--test/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777: test")
+	records, err = SplitMessageIfNecessary(gzipBatchInput)
+	assert.NoError(err)
+	assert.Equal(
+		records,
+		[][]byte{expectedRecord},
+	)
 }
