@@ -48,7 +48,8 @@ func KPLDeaggregate(kinesisRecord []byte) ([][]byte, error) {
 	recordSum := md5.Sum(src)
 	for i, b := range checksum {
 		if b != recordSum[i] {
-			// false alarm - the header matched but the checksum doesn't, so it's not KPL
+			// either the data is corrupted or this is not a KPL aggregate
+			// either way, return the data as-is
 			return [][]byte{kinesisRecord}, nil
 		}
 	}
@@ -72,6 +73,8 @@ func KPLDeaggregate(kinesisRecord []byte) ([][]byte, error) {
 // A similar result can be optained by calling KPLDeaggregate, then iterating over the results and callin SplitMessageIfNecessary.
 // This function makes the assumption that after KPL-deaggregating, the results are not CloudWatch aggregates, so it doesn't need to check them for a gzip header.
 // Also it lets us iterate over the user records one less time, since KPLDeaggregate loops over the records and we would need to loop again to unzlib.
+//
+// See the SplitMessageIfNecessary documentation for the format of output for CloudWatch log bundles.
 func DeaggregateAndSplitIfNecessary(kinesisRecord []byte) ([][]byte, error) {
 	if !IsKPLAggregate(kinesisRecord) {
 		return SplitMessageIfNecessary(kinesisRecord)
@@ -81,7 +84,8 @@ func DeaggregateAndSplitIfNecessary(kinesisRecord []byte) ([][]byte, error) {
 	recordSum := md5.Sum(src)
 	for i, b := range checksum {
 		if b != recordSum[i] {
-			// false alarm - the header matched but the checksum doesn't, so it's not KPL
+			// either the data is corrupted or this is not a KPL aggregate
+			// either way, return the data as-is
 			return [][]byte{kinesisRecord}, nil
 		}
 	}
@@ -107,6 +111,12 @@ func DeaggregateAndSplitIfNecessary(kinesisRecord []byte) ([][]byte, error) {
 // - records emitted from CWLogs Subscription (which are gzip compressed)
 // - zlib compressed records (e.g. as compressed and emitted by Kinesis plugin for Fluent Bit
 // - any other record (left unchanged)
+//
+// CloudWatch logs come as structured JSON. In the process of splitting, they are converted
+// into an rsyslog format that allows fairly uniform parsing of the result across the
+// AWS services that might emit logs to CloudWatch.
+// Note that these timezone used in these syslog records is guessed based on the local env.
+// If you need consistent timezones, set TZ=UTC in your environment.
 func SplitMessageIfNecessary(userRecord []byte) ([][]byte, error) {
 	// First try the record as a CWLogs record
 	if IsGzipped(userRecord) {

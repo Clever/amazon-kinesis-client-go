@@ -7,6 +7,7 @@ import (
 	"crypto/md5"
 	b64 "encoding/base64"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -16,6 +17,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	// In the conversion of CloudWatch LogEvent struct to an RSyslog struct to a string,
+	// the timezone used in the final string depends on the locally set timezone.
+	// in order for tests to pass, we set TZ to UTC
+	os.Setenv("TZ", "UTC")
+	os.Exit(m.Run())
+}
 
 func TestUnpacking(t *testing.T) {
 	input := "H4sIAAAAAAAAADWOTQuCQBRF/8ow6wj6ENRdhLXIClJoERKTvsZHOiPzxiLE/96YtTzcy72n4zUQCQnpuwEe8vXxkJ6O8XUfJclqG/EJ1y8FZkgq3RYvYfMy1pJcUGm5NbptXDZSYg2IekRqb5QbbCxqtcHKgiEeXrJvL3qCsgN2HIuxbtFpWFG7sdky8L1ZECwXc9+b/PUGgXPMfnrspxeydQn5A5VkJYjKlkzfWeGWUInhme1QASEx+qpNeZ/1H1PFPn3yAAAA"
@@ -289,7 +298,6 @@ func TestSplitGlue(t *testing.T) {
 	}
 }
 
-// If running this test directly with `go test`, it may fail unless you set the env var TZ=UTC
 func TestSplitIfNecesary(t *testing.T) {
 
 	// We provide three different inputs to batchedWriter.splitMessageIfNecessary
@@ -384,7 +392,6 @@ func createKPLAggregate(input [][]byte, compress bool) []byte {
 	return append(log, logHash[0:16]...)
 }
 
-// If running this test directly with `go test`, it may fail unless you set the env var TZ=UTC
 func TestKPLDeaggregate(t *testing.T) {
 	type test struct {
 		description string
@@ -441,7 +448,6 @@ func TestKPLDeaggregate(t *testing.T) {
 	}
 }
 
-// If running this test directly with `go test`, it may fail unless you set the env var TZ=UTC
 func TestDeaggregateAndSplit(t *testing.T) {
 	type test struct {
 		description string
