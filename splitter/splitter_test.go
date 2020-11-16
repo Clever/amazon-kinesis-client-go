@@ -448,7 +448,7 @@ func TestKPLDeaggregate(t *testing.T) {
 	}
 }
 
-func TestDeaggregateAndSplit(t *testing.T) {
+func TestDeaggregate(t *testing.T) {
 	type test struct {
 		description string
 		input       []byte
@@ -542,7 +542,7 @@ func TestDeaggregateAndSplit(t *testing.T) {
 	})
 	for _, tt := range tests {
 		t.Run(tt.description, func(t *testing.T) {
-			out, err := DeaggregateAndSplitIfNecessary(tt.input)
+			out, err := Deaggregate(tt.input)
 
 			if tt.shouldError {
 				assert.Error(t, err)

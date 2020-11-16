@@ -5,7 +5,7 @@
 // CloudWatch bundles. KCL automatically unbundles KPL aggregates before passing the records to the consumer.
 // Non-KCL applications (such as Lambdas consuming KPL-produced aggregates) should either use
 // - KPLDeaggregate if the consumer purely wants to unbundle KPL aggregates, but will handle the raw records themselves.
-// - DeaggregateAndSplitIfNecessary if the consumer wants to apply the same decompress and split logic as SplitMessageIfNecessary
+// - Deaggregate if the consumer wants to apply the same decompress and split logic as SplitMessageIfNecessary
 //   in addition to the KPL splitting.
 package splitter
 
@@ -65,7 +65,7 @@ func KPLDeaggregate(kinesisRecord []byte) ([][]byte, error) {
 	return records, nil
 }
 
-// DeaggregateAndSplitIfNecessary is a combination of KPLDeaggregate and SplitMessageIfNecessary
+// Deaggregate is a combination of KPLDeaggregate and SplitMessageIfNecessary
 // First it tries to KPL-deaggregate. If unsuccessful, it calls SplitIfNecessary on the original record.
 // If successful, it iterates over the individual user records and attempts to unzlib them.
 // If a record inside an aggregate is in zlib format, the output will contain the unzlibbed version.
@@ -75,7 +75,7 @@ func KPLDeaggregate(kinesisRecord []byte) ([][]byte, error) {
 // Also it lets us iterate over the user records one less time, since KPLDeaggregate loops over the records and we would need to loop again to unzlib.
 //
 // See the SplitMessageIfNecessary documentation for the format of output for CloudWatch log bundles.
-func DeaggregateAndSplitIfNecessary(kinesisRecord []byte) ([][]byte, error) {
+func Deaggregate(kinesisRecord []byte) ([][]byte, error) {
 	if !IsKPLAggregate(kinesisRecord) {
 		return SplitMessageIfNecessary(kinesisRecord)
 	}
