@@ -1,39 +1,137 @@
+// Package splitter provides functions for decoding various kinds of records that might come off of a kinesis stream.
+// It is equipped to with the functions to unbundle KPL aggregates and CloudWatch log bundles,
+// as well as apply appropriate decompression.
+// KCL applications would be most interested in `SplitMessageIfNecessary` which can handle zlibbed records as well as
+// CloudWatch bundles. KCL automatically unbundles KPL aggregates before passing the records to the consumer.
+// Non-KCL applications (such as Lambdas consuming KPL-produced aggregates) should either use
+// - KPLDeaggregate if the consumer purely wants to unbundle KPL aggregates, but will handle the raw records themselves.
+// - DeaggregateAndSplitIfNecessary if the consumer wants to apply the same decompress and split logic as SplitMessageIfNecessary
+//   in addition to the KPL splitting.
 package splitter
 
 import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"regexp"
 	"strconv"
 	"time"
+
+	kpl "github.com/a8m/kinesis-producer"
+	"github.com/golang/protobuf/proto"
 )
 
-// SplitMessageIfNecessary handles three types of records:
+// The Amazon Kinesis Producer Library (KPL) aggregates multiple logical user records into a single
+// Amazon Kinesis record for efficient puts.
+// https://github.com/awslabs/amazon-kinesis-producer/blob/master/aggregation-format.md
+var kplMagicNumber = []byte{0xF3, 0x89, 0x9A, 0xC2}
+
+// IsKPLAggregate checks a record for a KPL aggregate prefix.
+// It is not necessary to call this before calling KPLDeaggregate.
+func IsKPLAggregate(data []byte) bool {
+	return bytes.HasPrefix(data, kplMagicNumber)
+}
+
+// KPLDeaggregate takes a Kinesis record and converts it to one or more user records by applying KPL deaggregation.
+// If the record begins with the 4-byte magic prefix that KPL uses, the single Kinesis record is split into its component user records.
+// Otherwise, the return value is a singleton containing the original record.
+func KPLDeaggregate(kinesisRecord []byte) ([][]byte, error) {
+	if !IsKPLAggregate(kinesisRecord) {
+		return [][]byte{kinesisRecord}, nil
+	}
+	src := kinesisRecord[len(kplMagicNumber) : len(kinesisRecord)-md5.Size]
+	checksum := kinesisRecord[len(kinesisRecord)-md5.Size:]
+	recordSum := md5.Sum(src)
+	for i, b := range checksum {
+		if b != recordSum[i] {
+			// false alarm - the header matched but the checksum doesn't, so it's not KPL
+			return [][]byte{kinesisRecord}, nil
+		}
+	}
+	dest := new(kpl.AggregatedRecord)
+	err := proto.Unmarshal(src, dest)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling proto: %v", err)
+	}
+	var records [][]byte
+	for _, userRecord := range dest.GetRecords() {
+		records = append(records, userRecord.Data)
+	}
+	return records, nil
+}
+
+// DeaggregateAndSplitIfNecessary is a combination of KPLDeaggregate and SplitMessageIfNecessary
+// First it tries to KPL-deaggregate. If unsuccessful, it calls SplitIfNecessary on the original record.
+// If successful, it iterates over the individual user records and attempts to unzlib them.
+// If a record inside an aggregate is in zlib format, the output will contain the unzlibbed version.
+// If it is not zlibbed, the output will contain the record verbatim
+// A similar result can be optained by calling KPLDeaggregate, then iterating over the results and callin SplitMessageIfNecessary.
+// This function makes the assumption that after KPL-deaggregating, the results are not CloudWatch aggregates, so it doesn't need to check them for a gzip header.
+// Also it lets us iterate over the user records one less time, since KPLDeaggregate loops over the records and we would need to loop again to unzlib.
+func DeaggregateAndSplitIfNecessary(kinesisRecord []byte) ([][]byte, error) {
+	if !IsKPLAggregate(kinesisRecord) {
+		return SplitMessageIfNecessary(kinesisRecord)
+	}
+	src := kinesisRecord[len(kplMagicNumber) : len(kinesisRecord)-md5.Size]
+	checksum := kinesisRecord[len(kinesisRecord)-md5.Size:]
+	recordSum := md5.Sum(src)
+	for i, b := range checksum {
+		if b != recordSum[i] {
+			// false alarm - the header matched but the checksum doesn't, so it's not KPL
+			return [][]byte{kinesisRecord}, nil
+		}
+	}
+	dest := new(kpl.AggregatedRecord)
+	err := proto.Unmarshal(src, dest)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling proto: %v", err)
+	}
+	var records [][]byte
+	for _, userRecord := range dest.GetRecords() {
+		record, err := unzlib(userRecord.Data)
+		if err != nil {
+			return nil, fmt.Errorf("unzlibbing record: %w", err)
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+// SplitMessageIfNecessary recieves a user-record and returns a slice of one or more records.
+// if the record is coming off of a kinesis stream and might be KPL aggregated, it needs to be deaggregated before calling this.
+// This function handles three types of records:
 // - records emitted from CWLogs Subscription (which are gzip compressed)
-// - uncompressed records emitted from KPL
-// - zlib compressed records (e.g. as compressed and emitted by Kinesis plugin for Fluent Bi
-func SplitMessageIfNecessary(record []byte) ([][]byte, error) {
-	if IsGzipped(record) {
-		// Process a batch of messages from a CWLogs Subscription
-		return GetMessagesFromGzippedInput(record)
+// - zlib compressed records (e.g. as compressed and emitted by Kinesis plugin for Fluent Bit
+// - any other record (left unchanged)
+func SplitMessageIfNecessary(userRecord []byte) ([][]byte, error) {
+	// First try the record as a CWLogs record
+	if IsGzipped(userRecord) {
+		return GetMessagesFromGzippedInput(userRecord)
 	}
 
-	// Try to read it as a zlib-compressed record
-	// zlib.NewReader checks for a zlib header and returns an error if not found
-	zlibReader, err := zlib.NewReader(bytes.NewReader(record))
+	unzlibRecord, err := unzlib(userRecord)
+	if err != nil {
+		return nil, err
+	}
+
+	// Process a single message, from KPL
+	return [][]byte{unzlibRecord}, nil
+}
+
+func unzlib(input []byte) ([]byte, error) {
+	zlibReader, err := zlib.NewReader(bytes.NewReader(input))
 	if err == nil {
 		unzlibRecord, err := ioutil.ReadAll(zlibReader)
 		if err != nil {
 			return nil, fmt.Errorf("reading zlib-compressed record: %v", err)
 		}
-		return [][]byte{unzlibRecord}, nil
+		return unzlibRecord, nil
 	}
-	// Process a single message, from KPL
-	return [][]byte{record}, nil
+	return input, nil
 
 }
 

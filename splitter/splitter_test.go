@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"crypto/md5"
 	b64 "encoding/base64"
 	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/Clever/amazon-kinesis-client-go/decode"
+	kpl "github.com/a8m/kinesis-producer"
+	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -286,6 +289,7 @@ func TestSplitGlue(t *testing.T) {
 	}
 }
 
+// If running this test directly with `go test`, it may fail unless you set the env var TZ=UTC
 func TestSplitIfNecesary(t *testing.T) {
 
 	// We provide three different inputs to batchedWriter.splitMessageIfNecessary
@@ -348,4 +352,199 @@ func TestSplitIfNecesary(t *testing.T) {
 		records,
 		[][]byte{expectedRecord},
 	)
+}
+
+func createKPLAggregate(input [][]byte, compress bool) []byte {
+	var partitionKeyIndex uint64 = 0
+
+	records := []*kpl.Record{}
+	for _, log := range input {
+		if compress {
+			var z bytes.Buffer
+			zbuf := zlib.NewWriter(&z)
+			zbuf.Write(log)
+			zbuf.Close()
+			log = z.Bytes()
+		}
+		records = append(records, &kpl.Record{
+			PartitionKeyIndex: &partitionKeyIndex,
+			Data:              log,
+		})
+	}
+
+	logProto, err := proto.Marshal(&kpl.AggregatedRecord{
+		PartitionKeyTable: []string{"ecs_task_arn"},
+		Records:           records,
+	})
+	if err != nil {
+		panic(err)
+	}
+	log := append(kplMagicNumber, logProto...)
+	logHash := md5.Sum(logProto)
+	return append(log, logHash[0:16]...)
+}
+
+// If running this test directly with `go test`, it may fail unless you set the env var TZ=UTC
+func TestKPLDeaggregate(t *testing.T) {
+	type test struct {
+		description string
+		input       []byte
+		output      [][]byte
+		shouldError bool
+	}
+
+	tests := []test{
+		{
+			description: "non-aggregated record",
+			input:       []byte("hello"),
+			output:      [][]byte{[]byte("hello")},
+			shouldError: false,
+		},
+		{
+			description: "one kpl-aggregated record",
+			input: createKPLAggregate(
+				[][]byte{[]byte("hello")},
+				false,
+			),
+			output:      [][]byte{[]byte("hello")},
+			shouldError: false,
+		},
+		{
+			description: "three kpl-aggregated record",
+			input: createKPLAggregate([][]byte{
+				[]byte("hello, "),
+				[]byte("world"),
+				[]byte("!"),
+			},
+				false,
+			),
+			output: [][]byte{
+				[]byte("hello, "),
+				[]byte("world"),
+				[]byte("!"),
+			},
+			shouldError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			out, err := KPLDeaggregate(tt.input)
+			if tt.shouldError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, out, tt.output)
+		})
+
+	}
+}
+
+// If running this test directly with `go test`, it may fail unless you set the env var TZ=UTC
+func TestDeaggregateAndSplit(t *testing.T) {
+	type test struct {
+		description string
+		input       []byte
+		output      [][]byte
+		shouldError bool
+	}
+
+	tests := []test{
+		{
+			description: "non-aggregated record",
+			input:       []byte("hello"),
+			output:      [][]byte{[]byte("hello")},
+			shouldError: false,
+		},
+		{
+			description: "one kpl-aggregated record",
+			input: createKPLAggregate(
+				[][]byte{[]byte("hello")},
+				false,
+			),
+			output:      [][]byte{[]byte("hello")},
+			shouldError: false,
+		},
+		{
+			description: "three kpl-aggregated record",
+			input: createKPLAggregate([][]byte{
+				[]byte("hello, "),
+				[]byte("world"),
+				[]byte("!"),
+			},
+				false,
+			),
+			output: [][]byte{
+				[]byte("hello, "),
+				[]byte("world"),
+				[]byte("!"),
+			},
+			shouldError: false,
+		},
+		{
+			description: "one kpl-aggregated zlib record",
+			input: createKPLAggregate(
+				[][]byte{[]byte("hello")},
+				true,
+			),
+			output:      [][]byte{[]byte("hello")},
+			shouldError: false,
+		},
+		{
+			description: "three kpl-aggregated zlib record",
+			input: createKPLAggregate([][]byte{
+				[]byte("hello, "),
+				[]byte("world"),
+				[]byte("!"),
+			},
+				true,
+			),
+			output: [][]byte{
+				[]byte("hello, "),
+				[]byte("world"),
+				[]byte("!"),
+			},
+			shouldError: false,
+		},
+	}
+
+	var g bytes.Buffer
+	gbuf := gzip.NewWriter(&g)
+	cwLogBatch := LogEventBatch{
+		MessageType:         "test",
+		Owner:               "test",
+		LogGroup:            "test",
+		LogStream:           "test",
+		SubscriptionFilters: []string{""},
+		LogEvents: []LogEvent{{
+			ID:        "test",
+			Timestamp: UnixTimestampMillis(time.Date(2020, time.September, 9, 9, 10, 10, 0, time.UTC)),
+			Message:   "test",
+		}},
+	}
+	cwLogBatchJSON, _ := json.Marshal(cwLogBatch)
+	gbuf.Write(cwLogBatchJSON)
+	gbuf.Close()
+	gzipBatchInput := g.Bytes()
+
+	tests = append(tests, test{
+		description: "cloudwatch log batch",
+		input:       gzipBatchInput,
+		output:      [][]byte{[]byte("2020-09-09T09:10:10.000001+00:00 test test--test/arn%3Aaws%3Aecs%3Aus-east-1%3A999988887777%3Atask%2F12345678-1234-1234-1234-555566667777: test")},
+		shouldError: false,
+	})
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			out, err := DeaggregateAndSplitIfNecessary(tt.input)
+
+			if tt.shouldError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, out, tt.output)
+		})
+
+	}
 }
