@@ -13,6 +13,47 @@
   revision = "fb28ad3e4340c046323b7beba685a72fd12ecbe8"
 
 [[projects]]
+  digest = "1:ebf4bf0cc2e8705b66f67fecee8837e26c8b67a11ede9dd1f18a2841b6de5fac"
+  name = "github.com/a8m/kinesis-producer"
+  packages = ["."]
+  pruneopts = ""
+  revision = "2b76ac68f594232c724b44643c6994768d5a5f35"
+  version = "v0.2.0"
+
+[[projects]]
+  digest = "1:b597f05b10e1c62829891fc8110d4f8df9caaba70928eaaffeba182664ac190a"
+  name = "github.com/aws/aws-sdk-go"
+  packages = [
+    "aws",
+    "aws/awserr",
+    "aws/awsutil",
+    "aws/client",
+    "aws/client/metadata",
+    "aws/credentials",
+    "aws/endpoints",
+    "aws/request",
+    "aws/signer/v4",
+    "internal/context",
+    "internal/ini",
+    "internal/sdkio",
+    "internal/sdkmath",
+    "internal/sdkrand",
+    "internal/shareddefaults",
+    "internal/strings",
+    "internal/sync/singleflight",
+    "private/protocol",
+    "private/protocol/eventstream",
+    "private/protocol/eventstream/eventstreamapi",
+    "private/protocol/json/jsonutil",
+    "private/protocol/jsonrpc",
+    "private/protocol/rest",
+    "service/kinesis",
+  ]
+  pruneopts = ""
+  revision = "416d69c754abe8f0b32f6dcd8837d086812583d6"
+  version = "v1.35.28"
+
+[[projects]]
   digest = "1:0deddd908b6b4b768cfc272c16ee61e7088a60f7fe2f06c547bd3d8e1f8b8e77"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -21,12 +62,35 @@
   version = "v1.1.1"
 
 [[projects]]
+  digest = "1:6532affeeaaccdc6919d5773516176b77de02b4af8cf9a7fac16bae77aa319c5"
+  name = "github.com/golang/protobuf"
+  packages = ["proto"]
+  pruneopts = ""
+  revision = "4846b58453b3708320bdb524f25cc5a1d9cda4d4"
+  version = "v1.4.3"
+
+[[projects]]
   branch = "master"
   digest = "1:c7a6f4f1e7baeabf4de954d2d7f82343252f9e66b40abf694687b1df6fbccd5e"
   name = "github.com/jeromer/syslogparser"
   packages = ["."]
   pruneopts = ""
   revision = "5fbaaf06d9e72f781d19c61e130ba63f4d6dab31"
+
+[[projects]]
+  digest = "1:13fe471d0ed891e8544eddfeeb0471fd3c9f2015609a1c000aefdedf52a19d40"
+  name = "github.com/jmespath/go-jmespath"
+  packages = ["."]
+  pruneopts = ""
+  revision = "c2b33e84"
+
+[[projects]]
+  digest = "1:ef0f9731bc6c3c59396adc50f36da36ca98c704812c449794f9326f7bc64b5f1"
+  name = "github.com/jpillora/backoff"
+  packages = ["."]
+  pruneopts = ""
+  revision = "8eab2debe79d12b7bd3d10653910df25fa9552ba"
+  version = "1.0.0"
 
 [[projects]]
   digest = "1:256484dbbcd271f9ecebc6795b2df8cad4c458dd0f5fd82a8c2fa0c29f233411"
@@ -80,6 +144,41 @@
   revision = "3af7569d3a1e776fc2a3c1cec133b43105ea9c2e"
 
 [[projects]]
+  digest = "1:0d049ff01749ce1d6092c85cb90a02dfdb3b401939b13415b7e608f36bc8ecee"
+  name = "google.golang.org/protobuf"
+  packages = [
+    "encoding/prototext",
+    "encoding/protowire",
+    "internal/descfmt",
+    "internal/descopts",
+    "internal/detrand",
+    "internal/encoding/defval",
+    "internal/encoding/messageset",
+    "internal/encoding/tag",
+    "internal/encoding/text",
+    "internal/errors",
+    "internal/fieldsort",
+    "internal/filedesc",
+    "internal/filetype",
+    "internal/flags",
+    "internal/genid",
+    "internal/impl",
+    "internal/mapsort",
+    "internal/pragma",
+    "internal/set",
+    "internal/strs",
+    "internal/version",
+    "proto",
+    "reflect/protoreflect",
+    "reflect/protoregistry",
+    "runtime/protoiface",
+    "runtime/protoimpl",
+  ]
+  pruneopts = ""
+  revision = "3f7a61f89bb6813f89d981d1870ed68da0b3c3f1"
+  version = "v1.25.0"
+
+[[projects]]
   digest = "1:0923ed679d96b9e53b8c43892e2094ebb5dccd0a66709b20c90f43c37ff71ff1"
   name = "gopkg.in/Clever/kayvee-go.v6"
   packages = [
@@ -113,6 +212,8 @@
   input-imports = [
     "github.com/Clever/syslogparser",
     "github.com/Clever/syslogparser/rfc3164",
+    "github.com/a8m/kinesis-producer",
+    "github.com/golang/protobuf/proto",
     "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/require",
     "golang.org/x/time/rate",
