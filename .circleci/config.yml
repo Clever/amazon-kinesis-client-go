@@ -21,3 +21,4 @@ jobs:
     - run: make build
     - run: make bench
     - run: make test
+    - run: if [ "${CIRCLE_BRANCH}" == "master" ]; then $HOME/ci-scripts/circleci/github-release $GH_RELEASE_TOKEN; fi;
