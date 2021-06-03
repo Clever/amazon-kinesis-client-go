@@ -61,5 +61,5 @@ $(PKGS): golang-test-all-deps
 
 
 
-install_deps: golang-dep-vendor-deps
-	$(call golang-dep-vendor)
+install_deps:
+	go mod vendor
