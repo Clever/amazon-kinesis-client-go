@@ -1,7 +1,6 @@
 package decode
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -222,7 +221,6 @@ func TestSyslogDecoding(t *testing.T) {
 			fields, err := FieldsFromSyslog(spec.Input)
 			if spec.ExpectedError != nil {
 				assert.Error(err)
-				assert.True(errors.As(err, &spec.ExpectedError))
 				return
 			}
 			assert.NoError(err)
@@ -547,7 +545,6 @@ select sleep(2);`,
 			fields, err := ParseAndEnhance(spec.Line, "deploy-env")
 			if spec.ExpectedError != nil {
 				assert.Error(err)
-				assert.True(errors.As(err, &spec.ExpectedError))
 				return
 			}
 			assert.NoError(err)
@@ -557,7 +554,6 @@ select sleep(2);`,
 }
 
 func TestGetContainerMeta(t *testing.T) {
-
 	type containerMetaSpec struct {
 		description       string
 		input             map[string]interface{}

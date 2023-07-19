@@ -1,9 +1,8 @@
-module github.com/amazon-kinesis-client-go
+module github.com/Clever/amazon-kinesis-client-go
 
-go 1.13
+go 1.16
 
 require (
-	github.com/Clever/amazon-kinesis-client-go v1.0.0
 	github.com/Clever/syslogparser v0.0.0-20170816194131-fb28ad3e4340
 	github.com/a8m/kinesis-producer v0.2.0
 	github.com/aws/aws-sdk-go v1.35.28 // indirect

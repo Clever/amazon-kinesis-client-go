@@ -1,5 +1,3 @@
-github.com/Clever/amazon-kinesis-client-go v1.0.0 h1:rG+hkHCSe+xMGk3asESg18tiEj8X6To8vj0TRa1pKvQ=
-github.com/Clever/amazon-kinesis-client-go v1.0.0/go.mod h1:jLfi8QusUjdsYazmEH0DlSO4gE1WRzVE7cs4c/fOFdI=
 github.com/Clever/syslogparser v0.0.0-20170816194131-fb28ad3e4340 h1:wr8lTqPJZQpZkZgllQtrD96SecXkAu5MxzY3yJgsuCg=
 github.com/Clever/syslogparser v0.0.0-20170816194131-fb28ad3e4340/go.mod h1:e7Yy7RTiIMU9pZ+dcSviX3cpod8e0CEeTUPTgBbKlRE=
 github.com/a8m/kinesis-producer v0.2.0 h1:Bd5Oi4dczbTLPIZwVbm02464LIFgBqmViFj//b098xc=
