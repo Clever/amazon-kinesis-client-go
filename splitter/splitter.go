@@ -4,9 +4,9 @@
 // KCL applications would be most interested in `SplitMessageIfNecessary` which can handle zlibbed records as well as
 // CloudWatch bundles. KCL automatically unbundles KPL aggregates before passing the records to the consumer.
 // Non-KCL applications (such as Lambdas consuming KPL-produced aggregates) should either use
-// - KPLDeaggregate if the consumer purely wants to unbundle KPL aggregates, but will handle the raw records themselves.
-// - Deaggregate if the consumer wants to apply the same decompress and split logic as SplitMessageIfNecessary
-//   in addition to the KPL splitting.
+//   - KPLDeaggregate if the consumer purely wants to unbundle KPL aggregates, but will handle the raw records themselves.
+//   - Deaggregate if the consumer wants to apply the same decompress and split logic as SplitMessageIfNecessary
+//     in addition to the KPL splitting.
 package splitter
 
 import (
