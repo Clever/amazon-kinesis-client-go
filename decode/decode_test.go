@@ -100,7 +100,7 @@ func TestKayveeDecoding(t *testing.T) {
 	}
 
 	for _, spec := range specs {
-		t.Run(fmt.Sprintf(spec.Title), func(t *testing.T) {
+		t.Run(fmt.Sprint(spec.Title), func(t *testing.T) {
 			assert := assert.New(t)
 			fields, err := FieldsFromKayvee(spec.Input)
 			if spec.ExpectedError != nil {
@@ -217,7 +217,7 @@ func TestSyslogDecoding(t *testing.T) {
 		},
 	}
 	for _, spec := range specs {
-		t.Run(fmt.Sprintf(spec.Title), func(t *testing.T) {
+		t.Run(fmt.Sprint(spec.Title), func(t *testing.T) {
 			assert := assert.New(t)
 			fields, err := FieldsFromSyslog(spec.Input)
 			if spec.ExpectedError != nil {
@@ -542,7 +542,7 @@ select sleep(2);`,
 		},
 	}
 	for _, spec := range specs {
-		t.Run(fmt.Sprintf(spec.Title), func(t *testing.T) {
+		t.Run(fmt.Sprint(spec.Title), func(t *testing.T) {
 			assert := assert.New(t)
 			fields, err := ParseAndEnhance(spec.Line, "deploy-env")
 			if spec.ExpectedError != nil {
