@@ -2,7 +2,6 @@ include golang.mk
 .DEFAULT_GOAL := test # override default goal set in library makefile
 
 SHELL := /bin/bash
-PKG := github.com/Clever/amazon-kinesis-client-go
 PKGS := $(shell go list ./... | grep -v /vendor )
 .PHONY: download_jars run build
 $(eval $(call golang-version-check,1.24))
@@ -43,7 +42,7 @@ download_jars:
 all: test build
 
 build:
-	CGO_ENABLED=0 go build -installsuffix cgo -o build/$(CONSUMER) $(PKG)/cmd/$(CONSUMER)
+	CGO_ENABLED=0 go build -installsuffix cgo -o build/$(CONSUMER) ./cmd/$(CONSUMER)
 
 run: build download_jars
 	command -v java >/dev/null 2>&1 || { echo >&2 "Java not installed. Install java!"; exit 1; }
